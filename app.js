@@ -17,6 +17,7 @@ var block = require('./routes/block');
 var donation = require('./routes/donation');
 var follow = require('./routes/follow');
 var report = require('./routes/report');
+var auth = require('./routes/auth');
 
 var app = express();
 
@@ -40,6 +41,8 @@ app.use(session({
   resave: true,                     // 변경된것이 없으면 세션을 저장하지 않는다.(변경있을때만 resave)
   saveUninitialized: false          // 저장된것이 없으면 세션을 생성하지 않는다.
 }));
+app.use(passport.initialize());
+app.use(passport.session());
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/images', express.static(path.join(__dirname, 'uploads/images')));
 
@@ -50,6 +53,7 @@ app.use('/reports', report);
 app.use('/blocks', block);
 app.use('/donations', donation);
 app.use('/follows', follow);
+app.use('/auth', auth);
 
 // catch 404 and forward to error handler
 app.use(function(req, res, next) {
