@@ -9,10 +9,10 @@ function listenCountTop10(callback) {
     // 인기 질문을 나도 듣기 순으로 뽑아오는 쿼리
     var sql = 'SELECT u.id questionerId, us.id answernerId, u.photo questionerPhoto, us.photo answernerPhoto, q.content questionContent, a.voice_content voiceContent, q.price, a.listening_count listenCount, a.length ' +
         'FROM question q join answer a on(q.id = a.question_num) ' +
-        'join user u on(u.id =q.questioner_id) ' +
-        'join user us on(us.id =q.answerner_id) ' +
-        'order by a.listening_count desc ' +
-        'limit 10';
+        'JOIN user u on(u.id =q.questioner_id) ' +
+        'JOIN user us on(us.id =q.answerner_id) ' +
+        'ORDER BY a.listening_count desc ' +
+        'LIMIT 10';
 
     dbPool.getConnection(function(err, dbConn) {
         if (err) {
@@ -50,10 +50,10 @@ function priceTop10(callback) {
     // 인기 질문을 가격 순으로 뽑아오는 쿼리
     var sql = 'SELECT u.id questionerId, us.id answernerId, u.photo questionerPhoto, us.photo answernerPhoto, q.content questionerContent, a.voice_content voiceContent, q.price, a.listening_count listenCount, a.length ' +
         'FROM question q join answer a on(q.id =a.question_num) ' +
-        'join user u on(u.id = q.questioner_id) ' +
-        'join user us on(us.id = q.answerner_id) ' +
-        'order by q.price desc ' +
-        'limit 10';
+        'JOIN user u on(u.id = q.questioner_id) ' +
+        'JOIN user us on(us.id = q.answerner_id) ' +
+        'ORDER BY q.price desc ' +
+        'LIMIT 10';
     dbPool.getConnection(function(err, dbConn) {
         if (err) {
             return callback(err);
