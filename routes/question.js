@@ -1,110 +1,196 @@
 var express = require('express');
 var router = express.Router();
 var isSecure = require('./common').isSecure;
+var Question = require('../models/question');
 
 router.get('/', isSecure, function (req, res, next) {
 
-    // 6. 팔로우 질문 리스트
-    if (req.url.match(/\/\?direction=to&celebrity=true&pageNo=\d+&count=\d+/i)) {
-        res.send({
-            message: "6. 팔로우 질문 리스트",
-            result: [{
-                Q_id: "1",
-                A_id: "2",
-                Q_photo: "http://localhost/images/123.jpg",
-                Q_content: "질문내용",
-                price: "10000",
-                A_photo: "http://localhost/images/456.jpg",
-                voice_content: "http://localhost/voice/20160821.mp3",
-                listen_count: "103040",
-                length: "35"
-            }]
-        });
-    }
+    var pageNo = parseInt(req.query.pageNo, 10);
+    var count = parseInt(req.query.count, 10);
+    var answer = parseInt(req.query.answer,10);
 
-    // 11. 질문한 목록 to
-    if (req.url.match(/\/\?direction=to&id=.*&pageNo=\d+&count=\d+/i)) {
-        var id;
-        if (req.query.id === 'me') {
-            id = 'me';
-        } else {
-            id = parseInt(req.query.id, 10);
+    // TODO: 내 페이지 질문 목록 조회
+
+    if (answer === 0) {
+        if (req.query.direction === 'to') {
+            res.send({
+                result: [{
+                    questionerId: "1",
+                    questionerPhoto: "http://localhost/images/123.jpg",
+                    questionerContent: "질문내용"
+                }]
+            });
         }
-        console.log(id);
+
+        if (req.query.direction === 'from') {
+            res.send({
+                result: [{
+                    questionerId: "1",
+                    questionerPhoto: "http://localhost/images/123.jpg",
+                    questionerContent: "질문내용"
+                }]
+            });
+        }
+    }
+    else if (answer === 1) {
+        if (req.query.direction === 'to') {
+            res.send({
+                result: [{
+                    questionerId: "1",
+                    answernerId: "2",
+                    questionerPhoto: "http://localhost/images/123.jpg",
+                    answernerPhoto: "http://localhost/images/456.jpg",
+                    questionerContent: "질문내용",
+                    price: "10000",
+                    voiceContent: "http://localhost/voice/20160821.mp3",
+                    listenCount: "103040",
+                    length: "35",
+                    payInfo: "1"
+                }]
+            });
+        }
+
+        if (req.query.direction === 'from') {
+            res.send({
+                result: [{
+                    questionerId: "1",
+                    answernerId: "2",
+                    questionerPhoto: "http://localhost/images/123.jpg",
+                    questionerContent: "질문내용",
+                    price: "10000",
+                    answernerPhoto: "http://localhost/images/456.jpg",
+                    voiceContent: "http://localhost/voice/20160821.mp3",
+                    listenCount: "103040",
+                    length: "35",
+                    payInfo: "1"
+
+                }]
+            });
+        }
+    }
+    else if(answer === 2) {
         res.send({
-            message: "질문한 목록 to",
             result: [{
-                Q_id: "1",
-                A_id: "2",
-                Q_photo: "http://localhost/images/123.jpg",
-                Q_content: "질문내용",
+                questionerId: "1",
+                answernerId: "2",
+                questionerPhoto: "http://localhost/images/123.jpg",
+                questionerContent: "질문내용",
                 price: "10000",
-                A_photo: "http://localhost/images/456.jpg",
-                voice_content: "http://localhost/voice/20160821.mp3",
-                listen_count: "103040",
-                length: "35"
+                answernerPhoto: "http://localhost/images/456.jpg",
+                voiceContent: "http://localhost/voice/20160821.mp3",
+                listenCount: "103040",
+                length: "35",
+                payInfo: "1"
             }]
         });
     }
-    // 11. 질문받은 목록 from
-    if (req.url.match(/\/\?direction=from&id=.*&pageNo=\d+&count=\d+/i)) {
-        var id;
-        if (req.query.id === 'me') {
-            id = 'me';
-        } else {
-            id = parseInt(req.query.id, 10);
-        }
-        if (req.query.id === 'me') {
-        }
+    // TODO: 팔로잉 질문 리스트
+    else {
         res.send({
-            message: " 질문받은 목록 from",
-            result: [{
-                Q_id: "1",
-                A_id: "2",
-                Q_photo: "http://localhost/images/123.jpg",
-                Q_content: "질문내용",
+            result:[{
+                questionerId: "1",
+                answernerId: "2",
+                questionerPhoto: "http://localhost/images/123.jpg",
+                questionerContent: "질문내용",
                 price: "10000",
-                A_photo: "http://localhost/images/456.jpg",
-                voice_content: "http://localhost/voice/20160821.mp3",
-                listen_count: "103040",
+                answernerPhoto: "http://localhost/images/456.jpg",
+                voiceContent: "http://localhost/voice/20160821.mp3",
+                listenCount: "103040",
                 length: "35"
             }]
         });
     }
 });
-//hh
-// 13. 인기 질문 리스트
+
+// 인기 질문 리스트
 router.get('/popular10', isSecure, function (req, res, next) {
-    res.send({
-        message: "13. 인기 질문 리스트",
-        result: [{
-            Q_id: "1",
-            A_id: "2",
-            Q_photo: "http://localhost/images/123.jpg",
-            Q_content: "질문내용",
-            price: "10000",
-            A_photo: "http://localhost/images/456.jpg",
-            voice_content: "http://localhost/voice/20160821.mp3",
-            listen_count: "103040",
-            length: "35",
-            dfdf: 'test'
-        }]
-    });
+    var type = parseInt(req.query.type, 10);
+
+    // 나도듣기 순 top 10
+    if (type === 0) { // type = 0 이면 나도듣기순으로 인기질문 조회
+        Question.listenCountTop10(function(err, results) {
+            if (err) {
+                return next(err);
+            }
+            res.send({
+                result: results
+            });
+        })
+    }
+    // 높은 가격 순 top10
+    if (type === 1) { // type = 1 이면 가격순으로 인기질문 조회
+        Question.priceTop10(function(err, results) {
+            if (err) {
+                return next(err);
+            }
+            res.send({
+                result: results
+            });
+        })
+
+    }
 });
 
+// TODO: 상대방 페이지 질문 목록
+router.get('/:id', function(req,res,next) {
+    var pageNo = parseInt(req.query.pageNo, 10);
+    var count = parseInt(req.query.count, 10);
+    var answer = parseInt(req.query.answer, 10);
 
-// 10. 질문하기
-router.post('/', function (req, res, next) {
-    var newQuestion = {};
-    newQuestion.price = req.body.price;
-    newQuestion.date = req.body.date;
-    newQuestion.content = req.body.content;
-    newQuestion.responsor_id = req.body.responsor_id;
+    if(req.query.direction === 'to') {
+        if (answer === 0) {
+            res.send({
+                result: [{
+                    "questionerId": "1",
+                    "questionerPhoto": "http://localhost/images/123.jpg",
+                    "questionerContent": "질문내용"
+                }]
+            });
+        }
+        else if(answer === 1) {
+            res.send({
+                result:[{
+                    questionerId: "1",
+                    answernerId: "2",
+                    questionerPhoto: "http://localhost/images/123.jpg",
+                    answernerPhoto: "http://localhost/images/456.jpg",
+                    questionerContent: "질문내용",
+                    price: "10000",
+                    voiceContent: "http://localhost/voice/20160821.mp3",
+                    listenCount: "103040",
+                    length: "35"
 
-    res.send({
-        message: "질문이 등록 되었습니다."
-    });
+                }]
+            })
+        }
+    }
+    else if(req.query.direction === 'from') {
+        if(answer === 0) {
+            res.send({
+                result:[{
+                    questionerId: "1",
+                    questionerPhoto: "http://localhost/images/123.jpg",
+                    questionerContent: "질문내용"
+                }]
+            });
+        }
+        else if(answer === 1) {
+            res.send({
+                result:[{
+                    questionerId: "1",
+                    answernerId: "2",
+                    questionerPhoto: "http://localhost/images/123.jpg",
+                    questionerContent: "질문내용",
+                    price: "10000",
+                    answernerPhoto: "http://localhost/images/456.jpg",
+                    voiceContent: "http://localhost/voice/20160821.mp3",
+                    listenCount: "103040",
+                    length: "35",
+                    date: "2016-08-24"
+                }]
+            });
+        }
+    }
 });
-
 
 module.exports = router;

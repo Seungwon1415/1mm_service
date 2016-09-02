@@ -41,10 +41,15 @@ app.use(session({
   resave: true,                     // 변경된것이 없으면 세션을 저장하지 않는다.(변경있을때만 resave)
   saveUninitialized: false          // 저장된것이 없으면 세션을 생성하지 않는다.
 }));
+
 app.use(passport.initialize());
 app.use(passport.session());
 app.use(express.static(path.join(__dirname, 'public')));
-app.use('/images', express.static(path.join(__dirname, 'uploads/images')));
+app.use(require('./routes/common').isAuthenticated); //모든 요청이 있는 곳에 인증을 요구
+app.use('/uservoice', express.static(path.join(__dirname, 'uploads/users/voice')));
+app.use('/userphotos', express.static(path.join(__dirname, 'uploads/users/photos')));
+app.use('/donationphotos', express.static(path.join(__dirname, 'uploads/donations/photos')));
+app.use('/answervoice', express.static(path.join(__dirname, 'uploads/answer/voice')));
 
 
 app.use('/questions', question);
@@ -69,7 +74,7 @@ app.use(function(req, res, next) {
 if (app.get('env') === 'development') {
   app.use(function(err, req, res, next) {
     res.status(err.status || 500);
-    res.render('error', {
+    res.send({
       message: err.message,
       error: err
     });
@@ -80,7 +85,7 @@ if (app.get('env') === 'development') {
 // no stacktraces leaked to models
 app.use(function(err, req, res, next) {
   res.status(err.status || 500);
-  res.render('error', {
+  res.send({
     message: err.message,
     error: {}
   });

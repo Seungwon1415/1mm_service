@@ -1,13 +1,22 @@
 var express = require('express');
 var router = express.Router();
-// TODO: 신고
+var Report = require('../models/report');
 
+// 회원 신고
+// 회원 id와 신고번호를 받아서 신고테이블에 등록
 router.post('/', function (req, res, next) {
+    var report = {};
+    report.reportId = req.user.id;
+    report.suspectId = parseInt(req.body.suspectId, 10);
+    report.contentNo = parseInt(req.body.contentNo, 10);
 
-    var suspectID = req.body.suspectID;
-
-    res.send({
-        message: "신고 되었습니다."
+    Report.insertReport(report, function(err, result) {
+        if (err) {
+            return next(err);
+        }
+        res.send({
+            message: "신고 되었습니다."
+        });
     });
 });
 
