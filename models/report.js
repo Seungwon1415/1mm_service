@@ -1,7 +1,7 @@
 var dbPool = require('../models/common').dbPool;
 
-// 회원 신고하는 함수
-function insertReport(report, callback) {
+// 회원 신고
+function registerReport(report, callback) {
     // 신고 당하는 사람을 테이블에 저장하는 쿼리
     var sql_insert_report = 'insert into report(reporter_id, suspect_id, content) values(?, ?, ?)';
     dbPool.getConnection(function (err, dbConn) {
@@ -15,4 +15,4 @@ function insertReport(report, callback) {
     });
 }
 
-module.exports.insertReport = insertReport;
+module.exports.registerReport = registerReport;

@@ -3,14 +3,13 @@ var router = express.Router();
 var Report = require('../models/report');
 
 // 회원 신고
-// 회원 id와 신고번호를 받아서 신고테이블에 등록
 router.post('/', function (req, res, next) {
     var report = {};
     report.reportId = req.user.id;
     report.suspectId = parseInt(req.body.suspectId, 10);
     report.contentNo = parseInt(req.body.contentNo, 10);
 
-    Report.insertReport(report, function(err, result) {
+    Report.registerReport(report, function(err, result) {
         if (err) {
             return next(err);
         }

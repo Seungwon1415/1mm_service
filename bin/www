@@ -15,7 +15,8 @@ var path = require('path');
  * Get port from environment and store in Express.
  */
 
-var port = normalizePort(process.env.PORT || '8080');
+var port = normalizePort(process.env.PORT || '80');
+
 app.set('port', port);
 
 /**
@@ -36,12 +37,14 @@ var httpsServer = https.createServer(opts, app);
  * Listen on provided port, on all network interfaces.
  */
 
-httpServer.listen(port);
+httpServer.listen(port, function() {
+  console.log("HTTP Listening on 80");
+});
 httpServer.on('error', onError);
 httpServer.on('listening', onListening);
 
-httpsServer.listen(4433, function() {
-  console.log("HTTPS Listening on 4433");
+httpsServer.listen(443, function() {
+  console.log("HTTPS Listening on 443");
 });
 
 /**
@@ -95,7 +98,6 @@ function onError(error) {
 /**
  * Event listener for HTTP server "listening" event.
  */
-
 function onListening() {
   var addr = httpServer.address();
   var bind = typeof addr === 'string'

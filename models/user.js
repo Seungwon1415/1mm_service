@@ -56,10 +56,8 @@ function findOrCreate(profile, callback) {
                 dbConn.release();
                 var user = {};
                 user.id = results[0].id;
-                console.log(user);
                 return callback(null, user);
             }
-
             //등록된 유저가 없으면 회원을 등록
             dbConn.query(sql_insert_auth_info, [profile.id, profile.provider], function (err, result) {
                 dbConn.release();
@@ -96,42 +94,109 @@ function searchRecommend(callback) {
     });
 }
 
+function checkNickname(nickname, callback) {
+    console.log("함수안 " + nickname);
+    var sql_search_ninkname = 'select nickname from user where nickname = ?';
+    dbPool.getConnection(function (err, dbConn) {
+        if (err) {
+            return callback(err);
+        }
+        dbConn.query(sql_search_ninkname, [nickname], function (err, results) {
+            dbConn.release();
+            if (err) {
+                return callback(err);
+            }
+
+            if (results.length === 0) {
+                callback(null, 0); //중복 없을때
+            } else {
+                callback(null, -1); //중복 있을때
+            }
+        });
+    });
+}
+
 // 내 페이지 보기
 function showMyInfo(id, callback) {
     // 내페이지 조회 쿼리
     var sql =
-        'select u.id, u.nickname, u.name, u.photo, u.state_message, u.voice_message, u.following, u.follower,d.id donationId, d.name donationName ' +
-        'from user u join donation d on(u.donation_id = d.id) ' +
+        'select u.id, u.nickname, u.name, u.photo, u.state_message, d.id donationId, d.name donationName ' +
+        'from user u left outer join donation d on(u.donation_id = d.id) ' +
         'where u.id = ?';
+
+    var following = 0;
+    var follower = 0;
 
     dbPool.getConnection(function (err, dbConn) {
         if (err) {
             return callback(err);
         }
 
-        // 파일을 전송 해줄때 내 파일 저장 경로를 같이 붙여서 뿌려줌
-        dbConn.query(sql, [id], function (err, results) {
-            dbConn.release();
+        dbConn.beginTransaction(function (err) {
             if (err) {
                 return callback(err);
             }
-            var photoPath = "http://ec2-52-78-158-195.ap-northeast-2.compute.amazonaws.com:8080/userphotos/";
-            var voicePath = "http://ec2-52-78-158-195.ap-northeast-2.compute.amazonaws.com:8080/uservoice/";
+            // 파일을 전송 해줄때 내 파일 저장 경로를 같이 붙여서 뿌려줌
+            dbConn.query(sql, [id], function (err, results) {
+                if (err) {
+                    return callback(err);
+                }
 
-            results[0].photo = photoPath + results[0].photo;
-            results[0].voice_message = voicePath + results[0].voice_message;
-            callback(null, results[0]);
+                if (results.length === 0) {
+                    return callback(err, results);
+                }
+
+                async.series([searchFollowing, searchFollower], function (err) {
+                    if (err) {
+                        return callback(err);
+                    }
+                    var userphotos = process.env.HTTP_HOST + "/userphotos/";
+                    results[0].photo = userphotos + results[0].photo;
+                    results[0].following = following;
+                    results[0].follower = follower;
+                    callback(null, results[0]);
+                });
+            });
         });
+
+        function searchFollowing(done) {
+            var sql_search_following =
+                'select count(user_id) following ' +
+                'from following ' +
+                'where user_id = ?';
+            dbConn.query(sql_search_following, [id], function (err, result) {
+                if (err) {
+                    return done(err);
+                }
+                following = result[0].following;
+                done(null);
+            });
+        }
+
+        function searchFollower(done) {
+            var sql_search_follower =
+                'select count(user_id) follower ' +
+                'from following ' +
+                'where following_id = ?';
+
+            dbConn.query(sql_search_follower, [id], function (err, result) {
+                if (err) {
+                    return done(err);
+                }
+                follower = result[0].follower;
+                done(null);
+            });
+        }
+
     });
 }
 
 // 상대방 페이지 보기
 function showYourInfo(myId, yourId, callback) {
-    console.log(myId, yourId);
     var followInfo; //상대방이 내가 팔로잉 했는 사람인지 아닌지 알기 위한 변수
     // 상대방 정보 조회하는 쿼리
     var sql =
-        'select u.id, u.nickname, u.name, u.photo, u.state_message, u.voice_message, u.following, u.follower, d.id donationId, d.name donationName ' +
+        'select u.id, u.nickname, u.name, u.photo, u.state_message, u.following, u.follower, d.id donationId, d.name donationName ' +
         'from user u join donation d on(u.donation_id = d.id) ' +
         'where u.id = ?';
     dbPool.getConnection(function (err, dbConn) {
@@ -150,12 +215,14 @@ function showYourInfo(myId, yourId, callback) {
                     return callback(err);
                 }
 
-                // 파일을 전송 해줄때 내 파일 저장 경로를 같이 붙여서 뿌려줌
-                var photoPath = "http://ec2-52-78-158-195.ap-northeast-2.compute.amazonaws.com:8080/userphotos/";
-                var voicePath = "http://ec2-52-78-158-195.ap-northeast-2.compute.amazonaws.com:8080/uservoice/";
+                if (results.length === 0) {
+                    return callback(err, results);
+                }
 
-                results[0].photo = photoPath + results[0].photo;
-                results[0].voice_message = voicePath + results[0].voice_message;
+                // 파일을 전송 해줄때 내 파일 저장 경로를 같이 붙여서 뿌려줌
+                var userphotos = process.env.HTTP_HOST + "/userphotos/";
+
+                results[0].photo = userphotos + results[0].photo;
                 results[0].followInfo = followInfo;
                 callback(null, results[0]);
             });
@@ -184,7 +251,6 @@ function showYourInfo(myId, yourId, callback) {
 }
 
 // 팔로잉 추천
-
 function recommendFollowing(callback) {
     //랜덤으로 회원 정보를 뽑는 쿼리
     var sql = 'SELECT id userId, name, photo FROM user WHERE celebrity =1 ORDER BY rand() LIMIT 12';
@@ -200,9 +266,10 @@ function recommendFollowing(callback) {
             }
 
             // 사진을 전송 해줄때 내 파일 저장 경로를 같이 붙여서 뿌려줌
+            var userphotos = process.env.HTTP_HOST + "/userphotos/";
+
             async.each(results, function (item, callback) {
-                var photoPath = "http://ec2-52-78-158-195.ap-northeast-2.compute.amazonaws.com:8080/userphotos/";
-                item.photo = photoPath + item.photo;
+                item.photo = userphotos + item.photo;
                 callback(null);
             }, function (err) {
                 if (err) {
@@ -240,9 +307,10 @@ function donationRank(callback) {
             }
 
             // 사진을 전송 해줄때 내 파일 저장 경로를 같이 붙여서 뿌려줌
+            var userphotos = process.env.HTTP_HOST + "/userphotos/";
+
             async.each(results, function (item, callback) {
-                var photoPath = "http://ec2-52-78-158-195.ap-northeast-2.compute.amazonaws.com:8080/userphotos/";
-                item.userPhoto = photoPath + item.userPhoto;
+                item.userPhoto = userphotos + item.userPhoto;
                 callback(null);
             }, function (err) {
                 if (err) {
@@ -334,7 +402,8 @@ function updateProfile(profile, callback) {
                 if (err) {
                     return done(err);
                 }
-                var filePath = path.join(__dirname, '../uploads/users/voice/');
+
+                var filePath = path.join(__dirname, '../uploads/user/voices/');
                 // 실제 경로를 찾아줘서 삭제
                 fs.unlink(path.join(filePath, results[0].voice_message), function (err) {
                     if (err) {
@@ -350,7 +419,6 @@ function updateProfile(profile, callback) {
 
 // 프로필 사진을 수정하는 함수
 function updatePhoto(newPhoto, callback) {
-    console.log(newPhoto.photo);
 
     //사진이 있는지 없는지 확인하는 쿼리
     var sql_select_photo =
@@ -423,7 +491,7 @@ function updatePhoto(newPhoto, callback) {
                 if (err) {
                     return done(err);
                 }
-                var filePath = path.join(__dirname, '../uploads/users/photos');
+                var filePath = path.join(__dirname, '../uploads/user/photos');
                 // 실제 경로를 찾아줘서 삭제
                 fs.unlink(path.join(filePath, results[0].photo), function (err) {
                     if (err) {
@@ -435,6 +503,7 @@ function updatePhoto(newPhoto, callback) {
         });
     });
 }
+
 
 // 프로필 사진 삭제 하는 함수
 function deletePhoto(id, callback) {
@@ -478,6 +547,7 @@ function deletePhoto(id, callback) {
                             callback(err);
                         });
                     }
+
                     dbConn.commit(function () {
                         dbConn.release();
                         callback(null, 1); // 1은 파일이 있어서 삭제한다는 의미
@@ -498,7 +568,7 @@ function deletePhoto(id, callback) {
                     if (err) {
                         return done(err);
                     }
-                    var filePath = path.join(__dirname, '../uploads/users/photos');
+                    var filePath = path.join(__dirname, '../uploads/user/photos');
                     // 실제 경로를 찾아줘서 삭제
                     fs.unlink(path.join(filePath, results[0].photo), function (err) {
                         if (err) {
@@ -532,7 +602,7 @@ function updateDonation(id, donationId, callback) {
     });
 }
 
-
+// 유저 검색
 function searchUser(word, pageNo, count, callback) {
     var queryWord = '%' + word + '%';
 
@@ -549,9 +619,212 @@ function searchUser(word, pageNo, count, callback) {
                 return callback(err);
             }
 
+            var userphotos = process.env.HTTP_HOST + "/userphotos/";
 
             async.each(results, function (item, callback) {
-                var userphotos = "http://ec2-52-78-158-195.ap-northeast-2.compute.amazonaws.com:8080/userphotos/";
+                item.photo = userphotos + item.photo;
+                callback(null);
+            }, function (err) {
+                if (err) {
+                    return callback(err);
+                }
+                callback(null, results);
+            });
+        });
+    });
+}
+
+// 팔로우 등록
+function registerFollow(follow, callback) {
+    var sql =
+        'insert into following(user_id, following_id) ' +
+        'values(?, ?) ';
+
+    dbPool.getConnection(function (err, dbConn) {
+        if (err) {
+            return callback(err);
+        }
+        dbConn.query(sql, [follow.myId, follow.uid], function (err, result) {
+            dbConn.release();
+            if (err) {
+                return callback(err);
+            }
+            callback(null, result);
+        });
+    });
+}
+
+// 팔로우 취소
+function cancleFollow(follow, callback) {
+    var sql = 'DELETE FROM following WHERE user_id = ? and following_id = ? ';
+
+    dbPool.getConnection(function (err, dbConn) {
+        if (err) {
+            return callback(err);
+        }
+        dbConn.query(sql, [follow.myId, follow.uid], function (err, result) {
+            dbConn.release();
+            if (err) {
+                return callback(err);
+            }
+            callback(null, result);
+        });
+    });
+}
+
+// 내 페이지 질문 목록 - 내가 질문한 목록
+function showMySendQuestions(id, answer, pageNo, count, callback) {
+    var sql_incomplete_answer =
+        'select q.id questionId, q.questioner_id questionerId, u.name questionerName, u.nickname questionerNickname, u.photo questionerPhoto, q.content questionerContent, q.price ' +
+        'from question q left outer join answer a on(q.id = a.question_id) ' +
+        'join user u on(q.questioner_id = u.id) ' +
+        'where q.questioner_id = ? and a.voice_content is null ' +
+        'limit ?, ?';
+
+    var sql_complete_answer =
+        'select q.id questionId, q.questioner_id questionerId, u.name questionerName, u.nickname questionerNickname, u.photo questionerPhoto, q.content questionerContent, q.answerner_id answernerId, ' +
+        'us.name answernerName, us.nickname answernerNickname, us.photo answernerPhoto, q.price, a.listening_count listenCount, a.length ' +
+        'from question q join answer a on(q.id = a.question_id) ' +
+        'join user u on(q.questioner_id = u.id) ' +
+        'join user us on(q.answerner_id = us.id) ' +
+        'where q.questioner_id = ? ' +
+        'limit ?, ?';
+
+    dbPool.getConnection(function (err, dbConn) {
+
+        if (answer === 0) {
+            dbConn.query(sql_incomplete_answer, [id, (pageNo - 1) * count, count], function (err, results) {
+                dbConn.release();
+                if (err) {
+                    return callback(err);
+                }
+
+                // 파일을 전송 해줄때 내 파일 저장 경로를 같이 붙여서 뿌려줌
+                var userphotos = process.env.HTTP_HOST + "/userphotos/";
+
+                async.each(results, function (item, callback) {
+                    item.questionerPhoto = userphotos + item.questionerPhoto;
+                    callback(null);
+                }, function (err) {
+                    if (err) {
+                        return callback(err);
+                    }
+                    console.log(results);
+                    callback(null, results);
+                });
+            });
+        } else if (answer === 1) {
+            dbConn.query(sql_complete_answer, [id, (pageNo - 1) * count, count], function (err, results) {
+                dbConn.release();
+                if (err) {
+                    return callback(err);
+                }
+
+                // 파일을 전송 해줄때 내 파일 저장 경로를 같이 붙여서 뿌려줌
+
+                var userphotos = process.env.HTTP_HOST + "/userphotos/";
+                async.each(results, function (item, callback) {
+                    item.questionerPhoto = userphotos + item.questionerPhoto;
+                    item.answernerPhoto = userphotos + item.answernerPhoto;
+                    item.payInfo = 1;
+                    callback(null);
+                }, function (err) {
+                    if (err) {
+                        return callback(err);
+                    }
+                    console.log(results);
+                    callback(null, results);
+                });
+            });
+        }
+    });
+}
+
+// 내 페이지 질문 목록 - 내가 질문 받은 목록
+function showMyReceiveQuestions(id, answer, pageNo, count, callback) {
+    var sql_incomplete_answer =
+        'select q.id questionId, q.questioner_id questionerId, u.name questionerName, u.nickname questionerNickname, u.photo questionerPhoto, q.content questionerContent, q.price ' +
+        'from question q left outer join answer a on(q.id = a.question_id) ' +
+        'join user u on(q.questioner_id = u.id) ' +
+        'where q.answerner_id = ? and a.voice_content is null ' +
+        'limit ?, ?';
+
+    var sql_complete_answer =
+        'select q.id questionId, q.questioner_id questionerId, u.name questionerName, u.nickname questionerNickname, u.photo questionerPhoto, q.content questionerContent, q.answerner_id answernerId, ' +
+        'us.name answernerName, us.nickname answernerNickname, us.photo answernerPhoto, q.price, a.listening_count listenCount, a.length ' +
+        'from question q join answer a on(q.id = a.question_id) ' +
+        'join user u on(q.questioner_id = u.id) ' +
+        'join user us on(q.answerner_id = us.id) ' +
+        'where q.answerner_id = ? ' +
+        'limit ?, ?';
+
+    dbPool.getConnection(function (err, dbConn) {
+        if (answer === 0) {
+            dbConn.query(sql_incomplete_answer, [id, (pageNo - 1) * count, count], function (err, results) {
+                dbConn.release();
+                if (err) {
+                    return callback(err);
+                }
+
+                var userphotos = process.env.HTTP_HOST + "/userphotos/";
+                async.each(results, function (item, done) {
+                    item.questionerPhoto = userphotos + item.questionerPhoto;
+                    done(null);
+                }, function (err) {
+                    if (err) {
+                        return callback(err);
+                    }
+                    callback(null, results);
+                });
+            });
+        } else if (answer === 1) {
+            dbConn.query(sql_complete_answer, [id, (pageNo - 1) * count, count], function (err, results) {
+                dbConn.release();
+                if (err) {
+                    return callback(err);
+                }
+
+                var userphotos = process.env.HTTP_HOST + "/userphotos/";
+
+                // 파일을 전송 해줄때 내 파일 저장 경로를 같이 붙여서 뿌려줌
+                async.each(results, function (item, callback) {
+                    item.questionerPhoto = userphotos + item.questionerPhoto;
+                    item.answernerPhoto = userphotos + item.answernerPhoto;
+                    item.payInfo = 1;
+                    callback(null);
+                }, function (err) {
+                    if (err) {
+                        return callback(err);
+                    }
+                    callback(null, results);
+                });
+            });
+        }
+    });
+}
+
+// 내 팔로잉 목록 조회
+function showMyFollowing(id, pageNo, count, callback) {
+    //팔로잉 목록 조회 쿼리
+    var sql =
+        'SELECT f.following_id userId, u.photo, u.nickname, u.name, u.celebrity, f.distance ' +
+        'From following f JOIN user u ON(u.id = f.following_id) ' +
+        'JOIN user us on(us.id = f.user_id) ' +
+        'WHERE f.user_id = ? ' +
+        'LIMIT ?, ? ';
+
+    dbPool.getConnection(function (err, dbConn) {
+        if (err) {
+            return callback(err);
+        }
+        dbConn.query(sql, [id, (pageNo - 1) * count, count], function (err, results) {
+            dbConn.release();
+            if (err) {
+                return (callback);
+            }
+            // 사진을 전송 해줄때 내 파일 저장 경로를 같이 붙여서 뿌려줌
+            async.each(results, function (item, callback) {
+                var userphotos = process.env.HTTP_HOST + "/userphotos/";
 
                 item.photo = userphotos + item.photo;
                 callback(null);
@@ -565,12 +838,325 @@ function searchUser(word, pageNo, count, callback) {
     });
 }
 
+// 내 팔로워 목록 조회
 
-module.exports.showMyInfo = showMyInfo;
-module.exports.showYourInfo = showYourInfo;
+function showMyFollower(id, pageNo, count, callback) {
+
+    var sql_myFollowerList =
+        'select c.userId, c.photo, c.nickname, c.name, c.celebrity, b.myfollowing followInfo ' +
+        'from (SELECT f.user_id userId, us.photo photo, us.nickname nickname, us.name name, us.celebrity celebrity ' +
+        'FROM following f JOIN user u ON(u.id = f.following_id) ' +
+        'JOIN user us ON(us.id = f.user_id) ' +
+        'WHERE f.following_id = ?)c ' +
+        'left outer join (select fo.user_id yourfollower ' +
+        'from following f  join following fo on(f.user_id = fo.following_id) ' +
+        'where f.user_id= ? ' +
+        'group by fo.user_id)a on(c.userId = a.yourfollower) ' +
+        'left outer join (SELECT f.following_id myfollowing ' +
+        'From following f join user u on(u.id = f.following_id) ' +
+        'join user us on(us.id = f.user_id) ' +
+        'where f.user_id = ?)b ' +
+        'on (a.yourfollower = b.myfollowing) limit ?, ? ';
+
+    dbPool.getConnection(function (err, dbConn) {
+        if (err) {
+            return callback(err);
+        }
+        dbConn.query(sql_myFollowerList, [id, id, id, (pageNo - 1) * count, count], function (err, results) {
+            dbConn.release();
+            if (err) {
+                return callback(err);
+            }
+
+            async.each(results, function (item, done) {
+                if (typeof item.followInfo === 'number') {
+                    item.followInfo = 1;
+                } else {
+                    item.followInfo = 0;
+                }
+                done(null);
+            }, function (err) {
+                if (err) {
+                    return callback(err);
+                }
+                async.each(results, function (item, callback) {
+                    var userphotos = process.env.HTTP_HOST + "/userphotos/";
+
+                    item.photo = userphotos + item.photo;
+                    callback(null);
+                }, function (err) {
+                    if (err) {
+                        return callback(err);
+                    }
+                    callback(null, results);
+                });
+            });
+        });
+    });
+}
+
+
+// TODO: 상대방 팔로잉 목록
+
+function showYourFollowing(myId, yourId, pageNo, count, callback) {
+    var sql =
+        'SELECT f.following_id userId, u.photo, u.nickname, u.name, u.celebrity, f.distance ' +
+        'From following f JOIN user u ON(u.id = f.following_id) ' +
+        'JOIN user us on(us.id = f.user_id) ' +
+        'WHERE f.user_id = ? ' +
+        'LIMIT ?, ? ';
+
+    dbPool.getConnection(function (err, dbConn) {
+        if (err) {
+            return callback(err);
+        }
+        dbConn.query(sql, [yourId, (pageNo - 1) * count, count], function (err, results) {
+            dbConn.release();
+            if (err) {
+                return (callback);
+            }
+            callback(null, results);
+        });
+    });
+}
+
+// 상대방 팔로워 목록
+function showYourFollower(myId, yourId, pageNo, count, callback) {
+    var sql_yourFollowerList =
+        'select c.userId, c.photo, c.nickname, c.name, c.celebrity, b.myfollowing followInfo ' +
+        'from (SELECT f.user_id userId, us.photo photo, us.nickname nickname, us.name name, us.celebrity celebrity ' +
+        'FROM following f JOIN user u ON(u.id = f.following_id) ' +
+        'JOIN user us ON(us.id = f.user_id) ' +
+        'WHERE f.following_id = ?)c ' +
+        'left outer join (select fo.user_id yourfollower ' +
+        'from following f  join following fo on(f.user_id = fo.following_id) ' +
+        'where f.user_id= ? ' +
+        'group by fo.user_id)a on(c.userId = a.yourfollower) ' +
+        'left outer join (SELECT f.following_id myfollowing ' +
+        'From following f join user u on(u.id = f.following_id) ' +
+        'join user us on(us.id = f.user_id) ' +
+        'where f.user_id = ?)b ' +
+        'on (a.yourfollower = b.myfollowing) limit ?, ? ';
+
+    dbPool.getConnection(function (err, dbConn) {
+        if (err) {
+            return callback(err);
+        }
+        dbConn.query(sql_yourFollowerList, [yourId, yourId, myId, (pageNo - 1) * count, count], function (err, results) {
+            dbConn.release();
+            if (err) {
+                return callback(err);
+            }
+            async.each(results, function (item, done) {
+                if (typeof item.followInfo === 'number') {
+                    item.followInfo = 1;
+                } else {
+                    item.followInfo = 0;
+                }
+                done(null);
+            }, function (err) {
+                if (err) {
+                    return callback(err);
+                }
+                async.each(results, function (item, callback) {
+                    var userphotos = process.env.HTTP_HOST + "/userphotos/";
+                    ;
+
+                    item.photo = userphotos + item.photo;
+                    callback(null);
+                }, function (err) {
+                    if (err) {
+                        return callback(err);
+                    }
+                    callback(null, results);
+                });
+            });
+        });
+    });
+}
+
+// 상대방 페이지 질문 목록 - 상대방이 질문한 목록
+function showYourSendQuestions(myId, yourId, type, pageNo, count, callback) {
+    var sql_orderby_listenCount = 'select a.questionId, a.questionerId, a.questionerName,a.questionerNickname, a.questionerPhoto, ' +
+        'a.anwernerId, a.answernerName, a.answernerNickname, a.answernerPhoto, a.questionerContent, a.price, a.listenCount, b.answer_id payInfo ' +
+        'from (select q.id questionId, u.id questionerId, u.name questionerName, u.nickname questionerNickname, u.photo questionerPhoto, ' +
+                'us.id anwernerId, us.name answernerName, us.nickname answernerNickname, us.photo answernerPhoto, q.content questionerContent, q.price, a.listening_count listenCount, a.question_id,  q.date date ' +
+              'from question q join answer a on(q.id = a.question_id) ' +
+                              'join user u on(u.id = q.questioner_id) ' +
+                              'join user us on(us.id = q.answerner_id) ' +
+              'where q.id = a.question_id and u.id = ?)a ' +
+        'left outer join (select answer_id from pay p where user_id = ?)b ' +
+        'on(a.question_id = b.answer_id) ' +
+        'order by a.listenCount desc ' +
+        'limit ?, ? ';
+
+    var sql_orderby_new = 'select a.questionId, a.questionerId, a.questionerName,a.questionerNickname, a.questionerPhoto, ' +
+        'a.anwernerId, a.answernerName, a.answernerNickname, a.answernerPhoto, a.questionerContent, a.price, a.listenCount, b.answer_id payInfo ' +
+        'from (select q.id questionId, u.id questionerId, u.name questionerName, u.nickname questionerNickname, u.photo questionerPhoto, ' +
+        'us.id anwernerId, us.name answernerName, us.nickname answernerNickname, us.photo answernerPhoto, q.content questionerContent, q.price, a.listening_count listenCount, a.question_id,  q.date date ' +
+        'from question q join answer a on(q.id = a.question_id) ' +
+        'join user u on(u.id = q.questioner_id) ' +
+        'join user us on(us.id = q.answerner_id) ' +
+        'where q.id = a.question_id and u.id = ?)a ' +
+        'left outer join (select answer_id from pay p where user_id = ?)b ' +
+        'on(a.question_id = b.answer_id) ' +
+        'order by a.date desc ' +
+        'limit ?, ? ';
+
+    var userphotos = process.env.HTTP_HOST + "/userphotos/";
+
+    dbPool.getConnection(function (err, dbConn) {
+        if (err) {
+            return callback(err);
+        }
+        if (type === 0) {  // 나도듣기 순
+            dbConn.query(sql_orderby_listenCount, [yourId, myId, count * (pageNo - 1), count], function (err, results) {
+                dbConn.release();
+                if (err) {
+                    return callback(err);
+                }
+                async.each(results, function (item, done) {
+                    if (typeof item.payInfo === 'number') {
+                        item.payInfo = '1';
+                    }
+                    else {
+                        item.payInfo = '0';
+                    }
+                    item.questionerPhoto = userphotos + item.questionerPhoto;
+                    item.answernerPhoto = userphotos + item.answernerPhoto;
+
+                    done(null);
+                }, function (err) {
+                    if (err) {
+                        return callback(err);
+                    }
+                    callback(null, results);
+                });
+            });
+        }
+        else if (type === 1) {  // 최신 순
+            dbConn.query(sql_orderby_new, [yourId, myId, count * (pageNo - 1), count], function (err, results) {
+                dbConn.release();
+                if (err) {
+                    return callback(err);
+                }
+                async.each(results, function (item, callback) {
+                    if (typeof item.payInfo === 'number') {
+                        item.payInfo = '1';
+                    }
+                    else {
+                        item.payInfo = '0';
+                    }
+                    item.questionerPhoto = userphotos + item.questionerPhoto;
+                    item.answernerPhoto = userphotos + item.answernerPhoto;
+
+                    callback(null);
+                }, function (err) {
+                    if (err) {
+                        return callback(err);
+                    }
+                    callback(null, results);
+                });
+            });
+        }
+    });
+}
+
+
+// 상대방 페이지 - 상대방이 질문 받은 목록
+function showYourReceiveQuestions(myId, yourId, type, pageNo, count, callback) {
+    var sql_orderby_listenCount = 'select a.questionId, a.questionerId, a.questionerName,a.questionerNickname, a.questionerPhoto, ' +
+        'a.anwernerId, a.answernerName, a.answernerNickname, a.answernerPhoto, a.questionerContent, a.price, a.listenCount, b.answer_id payInfo ' +
+        'from (select q.id questionId, u.id questionerId, u.name questionerName, u.nickname questionerNickname, u.photo questionerPhoto, ' +
+        'us.id anwernerId, us.name answernerName, us.nickname answernerNickname, us.photo answernerPhoto, q.content questionerContent, q.price, a.listening_count listenCount, a.question_id,  q.date date ' +
+        'from question q join answer a on(q.id = a.question_id) ' +
+        'join user u on(u.id = q.questioner_id) ' +
+        'join user us on(us.id = q.answerner_id) ' +
+        'where q.id = a.question_id and us.id = ?)a ' +
+        'left outer join (select answer_id from pay p where user_id = ?)b ' +
+        'on(a.question_id = b.answer_id) ' +
+        'order by a.listenCount desc ' +
+        'limit ?, ? ';
+
+    var sql_orderby_new = 'select a.questionId, a.questionerId, a.questionerName,a.questionerNickname, a.questionerPhoto, ' +
+        'a.anwernerId, a.answernerName, a.answernerNickname, a.answernerPhoto, a.questionerContent, a.price, a.listenCount, b.answer_id payInfo ' +
+        'from (select q.id questionId, u.id questionerId, u.name questionerName, u.nickname questionerNickname, u.photo questionerPhoto, ' +
+        'us.id anwernerId, us.name answernerName, us.nickname answernerNickname, us.photo answernerPhoto, q.content questionerContent, q.price, a.listening_count listenCount, a.question_id,  q.date date ' +
+        'from question q join answer a on(q.id = a.question_id) ' +
+        'join user u on(u.id = q.questioner_id) ' +
+        'join user us on(us.id = q.answerner_id) ' +
+        'where q.id = a.question_id and us.id = ?)a ' +
+        'left outer join (select answer_id from pay p where user_id = ?)b ' +
+        'on(a.question_id = b.answer_id) ' +
+        'order by a.date desc ' +
+        'limit ?, ? ';
+
+    var userphotos = process.env.HTTP_HOST + "/userphotos/";
+
+    dbPool.getConnection(function (err, dbConn) {
+        if (err) {
+            return callback(err);
+        }
+        if (type === 0) {  // 나도듣기 순
+            dbConn.query(sql_orderby_listenCount, [yourId, myId, count * (pageNo - 1), count], function (err, results) {
+                dbConn.release();
+                if (err) {
+                    return callback(err);
+                }
+                async.each(results, function (item, done) {
+                    if (typeof item.payInfo === 'number') {
+                        item.payInfo = '1';
+                    }
+                    else {
+                        item.payInfo = '0';
+                    }
+                    item.questionerPhoto = userphotos + item.questionerPhoto;
+                    item.answernerPhoto = userphotos + item.answernerPhoto;
+
+                    done(null);
+                }, function (err) {
+                    if (err) {
+                        return callback(err);
+                    }
+                    callback(null, results);
+                });
+
+            });
+        }
+        else if (type === 1) {  // 최신 순
+            dbConn.query(sql_orderby_new, [yourId, myId, count * (pageNo - 1), count], function (err, results) {
+                dbConn.release();
+                if (err) {
+                    return callback(err);
+                }
+                async.each(results, function (item, callback) {
+                    if (typeof item.payInfo === 'number') {
+                        item.payInfo = '1';
+                    }
+                    else {
+                        item.payInfo = '0';
+                    }
+                    item.questionerPhoto = userphotos + item.questionerPhoto;
+                    item.answernerPhoto = userphotos + item.answernerPhoto;
+
+                    callback(null);
+                }, function (err) {
+                    if (err) {
+                        return callback(err);
+                    }
+                });
+                callback(null, results);
+            });
+        }
+    });
+}
+
 module.exports.findUser = findUser;
 module.exports.findOrCreate = findOrCreate;
 module.exports.searchRecommend = searchRecommend;
+module.exports.checkNickname = checkNickname;
+module.exports.showMyInfo = showMyInfo;
+module.exports.showYourInfo = showYourInfo;
 module.exports.recommendFollowing = recommendFollowing;
 module.exports.donationRank = donationRank;
 module.exports.updateProfile = updateProfile;
@@ -578,3 +1164,13 @@ module.exports.updatePhoto = updatePhoto;
 module.exports.deletePhoto = deletePhoto;
 module.exports.updateDonation = updateDonation;
 module.exports.searchUser = searchUser;
+module.exports.registerFollow = registerFollow;
+module.exports.cancleFollow = cancleFollow;
+module.exports.showMySendQuestions = showMySendQuestions;
+module.exports.showMyReceiveQuestions = showMyReceiveQuestions;
+module.exports.showMyFollowing = showMyFollowing;
+module.exports.showMyFollower = showMyFollower;
+module.exports.showYourFollowing = showYourFollowing;
+module.exports.showYourFollower = showYourFollower;
+module.exports.showYourSendQuestions = showYourSendQuestions;
+module.exports.showYourReceiveQuestions = showYourReceiveQuestions;
