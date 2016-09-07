@@ -95,7 +95,7 @@ function searchRecommend(callback) {
 }
 
 function checkNickname(nickname, callback) {
-    console.log("함수안 " + nickname);
+
     var sql_search_ninkname = 'select nickname from user where nickname = ?';
     dbPool.getConnection(function (err, dbConn) {
         if (err) {
@@ -193,19 +193,25 @@ function showMyInfo(id, callback) {
 
 // 상대방 페이지 보기
 function showYourInfo(myId, yourId, callback) {
-    var followInfo; //상대방이 내가 팔로잉 했는 사람인지 아닌지 알기 위한 변수
+
     // 상대방 정보 조회하는 쿼리
     var sql =
-        'select u.id, u.nickname, u.name, u.photo, u.state_message, u.following, u.follower, d.id donationId, d.name donationName ' +
+        'select u.id, u.nickname, u.name, u.photo, u.state_message, d.id donationId, d.name donationName ' +
         'from user u join donation d on(u.donation_id = d.id) ' +
         'where u.id = ?';
+
+    var followInfo; //상대방이 내가 팔로잉 했는 사람인지 아닌지 알기 위한 변수
+    var following = 0;
+    var follower = 0;
+
     dbPool.getConnection(function (err, dbConn) {
         if (err) {
             return callback(err);
         }
 
-        // 내가 팔로잉했는 사람인지 먼저 체크후 회원조회
+        // 내가 팔로잉했는 사람인지 먼저 체크 후 회원조회
         async.series([followCheck], function (err) {
+
             if (err) {
                 return callback(err);
             }
@@ -218,13 +224,19 @@ function showYourInfo(myId, yourId, callback) {
                 if (results.length === 0) {
                     return callback(err, results);
                 }
-
-                // 파일을 전송 해줄때 내 파일 저장 경로를 같이 붙여서 뿌려줌
                 var userphotos = process.env.HTTP_HOST + "/userphotos/";
 
-                results[0].photo = userphotos + results[0].photo;
-                results[0].followInfo = followInfo;
-                callback(null, results[0]);
+                async.series([searchFollowing, searchFollower], function (err) {
+                    if (err) {
+                        return callback(err);
+                    }
+
+                    results[0].photo = userphotos + results[0].photo;
+                    results[0].following = following;
+                    results[0].follower = follower;
+                    results[0].followInfo = followInfo;
+                    callback(null, results[0]);
+                });
             });
         });
 
@@ -235,6 +247,7 @@ function showYourInfo(myId, yourId, callback) {
                 "from following " +
                 "where user_id = ? and following_id = ? ";
 
+            console.log("dafsdfasdfasdfasdfasdfasdfasdf");
             dbConn.query(sql, [myId, yourId], function (err, results) {
                 if (err) {
                     return callback(err);
@@ -246,6 +259,35 @@ function showYourInfo(myId, yourId, callback) {
                 }
             });
             callback(null);
+        }
+
+        function searchFollowing(done) {
+            var sql_search_following =
+                'select count(user_id) following ' +
+                'from following ' +
+                'where user_id = ?';
+            dbConn.query(sql_search_following, [yourId], function (err, result) {
+                if (err) {
+                    return done(err);
+                }
+                following = result[0].following;
+                done(null);
+            });
+        }
+
+        function searchFollower(done) {
+            var sql_search_follower =
+                'select count(user_id) follower ' +
+                'from following ' +
+                'where following_id = ?';
+
+            dbConn.query(sql_search_follower, [yourId], function (err, result) {
+                if (err) {
+                    return done(err);
+                }
+                follower = result[0].follower;
+                done(null);
+            });
         }
     });
 }
@@ -635,22 +677,50 @@ function searchUser(word, pageNo, count, callback) {
 }
 
 // 팔로우 등록
-function registerFollow(follow, callback) {
+function registerFollow(myId, yourId, callback) {
     var sql =
-        'insert into following(user_id, following_id) ' +
-        'values(?, ?) ';
+        'insert into following(user_id, following_id) values(?, ?)';
+
 
     dbPool.getConnection(function (err, dbConn) {
         if (err) {
             return callback(err);
         }
-        dbConn.query(sql, [follow.myId, follow.uid], function (err, result) {
-            dbConn.release();
-            if (err) {
-                return callback(err);
-            }
-            callback(null, result);
-        });
+
+        if (yourId instanceof Array) {
+
+            async.each(yourId, function (item, done) {
+                parseInt(item, 10);
+                done(null);
+            }, function (err) {
+                if (err) {
+                    return callback(err);
+                }
+
+                async.each(yourId, function (item, done) {
+                    dbConn.query(sql, [myId, item], function (err, result) {
+                        if (err) {
+                            return done(err);
+                        }
+                        done(null);
+                    });
+                }, function (err) {
+                    dbConn.release();
+                    if (err) {
+                        return callback(err);
+                    }
+                    callback(null);
+                });
+            });
+        } else {
+            dbConn.query(sql, [myId, yourId], function (err, result) {
+                dbConn.release();
+                if (err) {
+                    return callback(err);
+                }
+                callback(null);
+            });
+        }
     });
 }
 
@@ -682,7 +752,7 @@ function showMySendQuestions(id, answer, pageNo, count, callback) {
         'limit ?, ?';
 
     var sql_complete_answer =
-        'select q.id questionId, q.questioner_id questionerId, u.name questionerName, u.nickname questionerNickname, u.photo questionerPhoto, q.content questionerContent, q.answerner_id answernerId, ' +
+        'select q.id questionId, q.questioner_id questionerId, u.name questionerName, u.nickname questionerNickname, u.photo questionerPhoto, q.content questionerContent, a.id answerId, q.answerner_id answernerId, ' +
         'us.name answernerName, us.nickname answernerNickname, us.photo answernerPhoto, q.price, a.listening_count listenCount, a.length ' +
         'from question q join answer a on(q.id = a.question_id) ' +
         'join user u on(q.questioner_id = u.id) ' +
@@ -750,7 +820,7 @@ function showMyReceiveQuestions(id, answer, pageNo, count, callback) {
         'limit ?, ?';
 
     var sql_complete_answer =
-        'select q.id questionId, q.questioner_id questionerId, u.name questionerName, u.nickname questionerNickname, u.photo questionerPhoto, q.content questionerContent, q.answerner_id answernerId, ' +
+        'select q.id questionId, q.questioner_id questionerId, u.name questionerName, u.nickname questionerNickname, u.photo questionerPhoto, q.content questionerContent, a.id answerId, q.answerner_id answernerId, ' +
         'us.name answernerName, us.nickname answernerNickname, us.photo answernerPhoto, q.price, a.listening_count listenCount, a.length ' +
         'from question q join answer a on(q.id = a.question_id) ' +
         'join user u on(q.questioner_id = u.id) ' +
@@ -897,7 +967,6 @@ function showMyFollower(id, pageNo, count, callback) {
 
 
 // TODO: 상대방 팔로잉 목록
-
 function showYourFollowing(myId, yourId, pageNo, count, callback) {
     var sql =
         'SELECT f.following_id userId, u.photo, u.nickname, u.name, u.celebrity, f.distance ' +
@@ -977,23 +1046,25 @@ function showYourFollower(myId, yourId, pageNo, count, callback) {
 
 // 상대방 페이지 질문 목록 - 상대방이 질문한 목록
 function showYourSendQuestions(myId, yourId, type, pageNo, count, callback) {
-    var sql_orderby_listenCount = 'select a.questionId, a.questionerId, a.questionerName,a.questionerNickname, a.questionerPhoto, ' +
-        'a.anwernerId, a.answernerName, a.answernerNickname, a.answernerPhoto, a.questionerContent, a.price, a.listenCount, b.answer_id payInfo ' +
+    var sql_orderby_listenCount =
+        'select a.questionId, a.questionerId, a.questionerName,a.questionerNickname, a.questionerPhoto, ' +
+        'a.answerId, a.anwernerId, a.answernerName, a.answernerNickname, a.answernerPhoto, a.questionerContent, a.price, a.listenCount, b.answer_id payInfo ' +
         'from (select q.id questionId, u.id questionerId, u.name questionerName, u.nickname questionerNickname, u.photo questionerPhoto, ' +
-                'us.id anwernerId, us.name answernerName, us.nickname answernerNickname, us.photo answernerPhoto, q.content questionerContent, q.price, a.listening_count listenCount, a.question_id,  q.date date ' +
-              'from question q join answer a on(q.id = a.question_id) ' +
-                              'join user u on(u.id = q.questioner_id) ' +
-                              'join user us on(us.id = q.answerner_id) ' +
-              'where q.id = a.question_id and u.id = ?)a ' +
+        'a.id answerId, us.id anwernerId, us.name answernerName, us.nickname answernerNickname, us.photo answernerPhoto, q.content questionerContent, q.price, a.listening_count listenCount, a.question_id,  q.date date ' +
+        'from question q join answer a on(q.id = a.question_id) ' +
+        'join user u on(u.id = q.questioner_id) ' +
+        'join user us on(us.id = q.answerner_id) ' +
+        'where q.id = a.question_id and u.id = ?)a ' +
         'left outer join (select answer_id from pay p where user_id = ?)b ' +
         'on(a.question_id = b.answer_id) ' +
         'order by a.listenCount desc ' +
         'limit ?, ? ';
 
-    var sql_orderby_new = 'select a.questionId, a.questionerId, a.questionerName,a.questionerNickname, a.questionerPhoto, ' +
-        'a.anwernerId, a.answernerName, a.answernerNickname, a.answernerPhoto, a.questionerContent, a.price, a.listenCount, b.answer_id payInfo ' +
+    var sql_orderby_new =
+        'select a.questionId, a.questionerId, a.questionerName,a.questionerNickname, a.questionerPhoto, ' +
+        'a.answerId, a.anwernerId, a.answernerName, a.answernerNickname, a.answernerPhoto, a.questionerContent, a.price, a.listenCount, b.answer_id payInfo ' +
         'from (select q.id questionId, u.id questionerId, u.name questionerName, u.nickname questionerNickname, u.photo questionerPhoto, ' +
-        'us.id anwernerId, us.name answernerName, us.nickname answernerNickname, us.photo answernerPhoto, q.content questionerContent, q.price, a.listening_count listenCount, a.question_id,  q.date date ' +
+        'a.id answerId, us.id anwernerId, us.name answernerName, us.nickname answernerNickname, us.photo answernerPhoto, q.content questionerContent, q.price, a.listening_count listenCount, a.question_id,  q.date date ' +
         'from question q join answer a on(q.id = a.question_id) ' +
         'join user u on(u.id = q.questioner_id) ' +
         'join user us on(us.id = q.answerner_id) ' +
@@ -1065,10 +1136,11 @@ function showYourSendQuestions(myId, yourId, type, pageNo, count, callback) {
 
 // 상대방 페이지 - 상대방이 질문 받은 목록
 function showYourReceiveQuestions(myId, yourId, type, pageNo, count, callback) {
-    var sql_orderby_listenCount = 'select a.questionId, a.questionerId, a.questionerName,a.questionerNickname, a.questionerPhoto, ' +
-        'a.anwernerId, a.answernerName, a.answernerNickname, a.answernerPhoto, a.questionerContent, a.price, a.listenCount, b.answer_id payInfo ' +
+    var sql_orderby_listenCount =
+        'select a.questionId, a.questionerId, a.questionerName,a.questionerNickname, a.questionerPhoto, ' +
+        'a.answerId, a.anwernerId, a.answernerName, a.answernerNickname, a.answernerPhoto, a.questionerContent, a.price, a.listenCount, b.answer_id payInfo ' +
         'from (select q.id questionId, u.id questionerId, u.name questionerName, u.nickname questionerNickname, u.photo questionerPhoto, ' +
-        'us.id anwernerId, us.name answernerName, us.nickname answernerNickname, us.photo answernerPhoto, q.content questionerContent, q.price, a.listening_count listenCount, a.question_id,  q.date date ' +
+        'a.id answerId, us.id anwernerId, us.name answernerName, us.nickname answernerNickname, us.photo answernerPhoto, q.content questionerContent, q.price, a.listening_count listenCount, a.question_id,  q.date date ' +
         'from question q join answer a on(q.id = a.question_id) ' +
         'join user u on(u.id = q.questioner_id) ' +
         'join user us on(us.id = q.answerner_id) ' +
@@ -1079,9 +1151,9 @@ function showYourReceiveQuestions(myId, yourId, type, pageNo, count, callback) {
         'limit ?, ? ';
 
     var sql_orderby_new = 'select a.questionId, a.questionerId, a.questionerName,a.questionerNickname, a.questionerPhoto, ' +
-        'a.anwernerId, a.answernerName, a.answernerNickname, a.answernerPhoto, a.questionerContent, a.price, a.listenCount, b.answer_id payInfo ' +
+        'a.answerId, a.anwernerId, a.answernerName, a.answernerNickname, a.answernerPhoto, a.questionerContent, a.price, a.listenCount, b.answer_id payInfo ' +
         'from (select q.id questionId, u.id questionerId, u.name questionerName, u.nickname questionerNickname, u.photo questionerPhoto, ' +
-        'us.id anwernerId, us.name answernerName, us.nickname answernerNickname, us.photo answernerPhoto, q.content questionerContent, q.price, a.listening_count listenCount, a.question_id,  q.date date ' +
+        'a.id answerId, us.id anwernerId, us.name answernerName, us.nickname answernerNickname, us.photo answernerPhoto, q.content questionerContent, q.price, a.listening_count listenCount, a.question_id,  q.date date ' +
         'from question q join answer a on(q.id = a.question_id) ' +
         'join user u on(u.id = q.questioner_id) ' +
         'join user us on(us.id = q.answerner_id) ' +

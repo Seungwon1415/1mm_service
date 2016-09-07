@@ -11,12 +11,14 @@ var redisClient = redis.createClient();
 var RedisStore = require('connect-redis')(session);
 
 
+var answer = require('./routes/answer');
 var question = require('./routes/question');
 var user = require('./routes/user');
 var block = require('./routes/block');
 var donation = require('./routes/donation');
 var report = require('./routes/report');
 var auth = require('./routes/auth');
+var pay = require('./routes/pay');
 
 var app = express();
 
@@ -50,12 +52,14 @@ app.use('/donationphotos', express.static(path.join(__dirname, 'uploads/donation
 app.use('/answervoices', express.static(path.join(__dirname, 'uploads/answer/voices')));
 app.use(require('./routes/common').isAuthenticated); //모든 요청이 있는 곳에 인증을 요구
 
+app.use('/answers', answer);
 app.use('/questions', question);
 app.use('/users', user);
 app.use('/reports', report);
 app.use('/blocks', block);
 app.use('/donations', donation);
 app.use('/auth', auth);
+app.use('/pays', pay);
 
 // catch 404 and forward to error handler
 app.use(function (req, res, next) {

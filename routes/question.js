@@ -4,7 +4,7 @@ var isSecure = require('./common').isSecure;
 var Question = require('../models/question');
 
 // 인기 질문 리스트
-router.get('/popular10', isSecure, function (req, res, next) {
+router.get('/popular10', function (req, res, next) {
     var type = parseInt(req.query.type, 10);
     var id = req.user.id;
 
@@ -33,68 +33,37 @@ router.get('/popular10', isSecure, function (req, res, next) {
     }
 });
 
-// TODO: 상대방 페이지 질문 목록
-router.get('/:id', function (req, res, next) {
+
+// 팔로잉 질문 리스트, 나도 듣기 보관함
+router.get('/', function (req, res, next) {
+    var type = parseInt(req.query.type, 10);
     var pageNo = parseInt(req.query.pageNo, 10);
     var count = parseInt(req.query.count, 10);
-    var answer = parseInt(req.query.answer, 10);
+    var id = req.user.id;
 
-    if (req.query.direction === 'to') {
-        if (answer === 0) {
-            res.send({
-                result: [{
-                    "questionerId": "1",
-                    "questionerPhoto": "http://localhost/images/123.jpg",
-                    "questionerContent": "질문내용"
-                }]
-            });
-        }
-        else if (answer === 1) {
-            res.send({
-                result: [{
-                    questionerId: "1",
-                    answernerId: "2",
-                    questionerPhoto: "http://localhost/images/123.jpg",
-                    answernerPhoto: "http://localhost/images/456.jpg",
-                    questionerContent: "질문내용",
-                    price: "10000",
-                    voiceContent: "http://localhost/voice/20160821.mp3",
-                    listenCount: "103040",
-                    length: "35"
+    if (type === 0) {
+        Question.showMainList(id, pageNo, count, function(err, results) {
+            if (err) {
+                return next(err);
+            }
 
-                }]
-            })
-        }
-    }
-    else if (req.query.direction === 'from') {
-        if (answer === 0) {
             res.send({
-                result: [{
-                    questionerId: "1",
-                    questionerPhoto: "http://localhost/images/123.jpg",
-                    questionerContent: "질문내용"
-                }]
+                result: results
             });
-        }
-        else if (answer === 1) {
+        });
+    } else if (type === 1) {
+        Question.showListeningBoxList(id, pageNo, count, function(err, results) {
+           if (err) {
+               return next(err);
+           }
             res.send({
-                result: [{
-                    questionerId: "1",
-                    answernerId: "2",
-                    questionerPhoto: "http://localhost/images/123.jpg",
-                    questionerContent: "질문내용",
-                    price: "10000",
-                    answernerPhoto: "http://localhost/images/456.jpg",
-                    voiceContent: "http://localhost/voice/20160821.mp3",
-                    listenCount: "103040",
-                    length: "35",
-                    date: "2016-08-24"
-                }]
-            });
-        }
+               result: results
+           })
+        });
     }
 });
 
+// 질문하기
 router.post('/', function (req, res, next) {
     var newQuestion = {};
     newQuestion.questionerId = req.user.id;

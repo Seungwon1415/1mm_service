@@ -59,24 +59,22 @@ router.get('/', function (req, res, next) {
     }
 });
 
-router.get('/me/check', function (req, res, next) {
-    var nickname = req.query.nickname;
 
-    console.log(nickname);
-    User.checkNickname(nickname, function (err, result) {
-        if (err) {
-            return next(err);
-        }
-        console.log(result);
-        res.send({
-            result: result
+// 내 페이지 조회 & 아이디 중복 체크
+router.get('/me', function (req, res, next) {
+    // 동적 파라미터로 me가 들어오면 내 정보를 조회
+    if (req.query.nickname) {
+        var nickname = req.query.nickname;
+        User.checkNickname(nickname, function (err, result) {
+            if (err) {
+                return next(err);
+            }
+            console.log(result);
+            res.send({
+                result: result
+            });
         });
-    });
-});
-
-// 상대방 & 내 페이지 조회
-router.get('/:uid', function (req, res, next) {
-    if (req.params.uid === 'me') { // 동적 파라미터로 me가 들어오면 내 정보를 조회
+    } else {
         var id = req.user.id;
         User.showMyInfo(id, function (err, results) {
             if (err) {
@@ -86,16 +84,24 @@ router.get('/:uid', function (req, res, next) {
                 result: results
             });
         });
-    } else { // 동적 파라미터로 회원 id가 들어오면 회원 정보를 조회
-        var myId = req.user.id;
-        var yourId = parseInt(req.params.uid);
-
-        User.showYourInfo(myId, yourId, function (err, results) {
-            res.send({
-                result: results
-            });
-        });
     }
+});
+
+// 상대방 페이지 조회
+router.get('/:uid', function (req, res, next) {
+    // 동적 파라미터로 회원 id가 들어오면 회원 정보를 조회
+    var myId = req.user.id;
+    var yourId = parseInt(req.params.uid, 10);
+    console.log(myId);
+    console.log(yourId);
+    User.showYourInfo(myId, yourId, function (err, results) {
+        if (err) {
+            return next(err);
+        }
+        res.send({
+            result: results
+        });
+    });
 });
 
 // 나도듣기 보관함
@@ -165,13 +171,13 @@ router.put('/me', function (req, res, next) {
             }
         });
     } else if (type === 2) { // 2일경우 기부처 수정
-        User.deletePhoto(id, function(err, result) {
-           if (err) {
-               return next(err);
-           }
-           res.send({
-               result: "사진을 삭제 하였습니다."
-           })
+        User.deletePhoto(id, function (err, result) {
+            if (err) {
+                return next(err);
+            }
+            res.send({
+                result: "사진을 삭제 하였습니다."
+            })
         });
     } else if (type === 3) { // 3일경우 기부처 수정
         var donationId = parseInt(req.body.donationId, 10);
@@ -215,21 +221,20 @@ router.get('/me/questions', isSecure, function (req, res, next) {
     }
 });
 
-// 팔로우 등록
-router.post('/:uid/follows', function (req, res, next) {
+// 내 팔로우 등록
+router.post('/me/follows', function (req, res, next) {
+    var myId = req.user.id;
+    var userId = req.body.userId;
 
-    var follow = {};
-    follow.myId = req.user.id;
-    follow.uid = parseInt(req.params.uid, 10);
-
-    User.registerFollow(follow, function (err, result) {
+    User.registerFollow(myId, userId, function (err, result) {
         if (err) {
             return next(err);
         }
-
         res.send({
+            result: result,
             message: "팔로우가 등록되었습니다."
         });
+
     });
 });
 
@@ -293,9 +298,7 @@ router.get('/:uid/follows', function (req, res, next) {
                 result: results
             });
         });
-    }
-
-    if (req.query.direction === 'from') {
+    }else if (req.query.direction === 'from') {
         User.showYourFollower(myId, yourId, pageNo, count, function (err, results) {
             if (err) {
                 return next(err);
@@ -335,7 +338,6 @@ router.get('/:uid/questions', function (req, res, next) {
         });
     }
 });
-
 
 
 module.exports = router;
