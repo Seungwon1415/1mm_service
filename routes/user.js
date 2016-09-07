@@ -193,7 +193,7 @@ router.put('/me', function (req, res, next) {
 });
 
 // 내 페이지 질문 목록
-router.get('/me/questions', isSecure, function (req, res, next) {
+router.get('/me/questions', function (req, res, next) {
     var id = req.user.id;
     var pageNo = parseInt(req.query.pageNo, 10);
     var count = parseInt(req.query.count, 10);

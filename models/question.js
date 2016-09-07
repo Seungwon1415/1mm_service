@@ -98,23 +98,6 @@ function priceTop10(id, callback) {
     });
 }
 
-// 질문하기
-function registerQuestion(newQuestion, callback) {
-    var sql_insert_question =
-        'insert into question(questioner_id, answerner_id, price, date, content) values(?, ?, ?, ?, ?)';
-    dbPool.getConnection(function (err, dbConn) {
-        dbConn.query(sql_insert_question, [newQuestion.questionerId, newQuestion.answernerId, newQuestion.price, newQuestion.date, newQuestion.content], function (err, result) {
-            dbConn.release();
-            if (err) {
-                return callback(err);
-            }
-
-            callback(null, result);
-        });
-    });
-}
-
-
 function showListeningBoxList(id, pageNo, count, callback) {
     var sql_search_pay =
         'select q.id questionId, q.questioner_id questionerId, u.name questionerName, u.nickname questionerNickname, u.photo questionerPhoto, q.content questionerContent, a.id answerId, q.answerner_id answernerId, ' +
@@ -186,19 +169,16 @@ function showMainList(id, pageNo, count, callback) {
     });
 }
 
+
 // 질문 하기
 function registerQuestion(newQuestion, callback) {
-
-    var sql_insert_question = 'insert into question(questioner_id, answerner_id, price, date, content) values(?, ?, ?, ?, ?) ';
-    var sql_update_my_point = 'update user set point = (point - ?) where id = ? ';
-    var sql_update_temp_point = 'insert into transmission(user_id, question_id, tempmoney) values(?, ?, ?)';
 
     dbPool.getConnection(function (err, dbConn) {
         dbConn.beginTransaction(function (err) {
             if (err) {
                 return callback(err);
             }
-            async.series([insertQuestion, updateMyPoint, updateTempPoint], function (err) {
+            async.series([insertQuestion, updateMyPoint, insertTempPoint], function (err) {
                 dbConn.release();
                 if (err) {
                     return dbConn.rollback(function () {
@@ -209,7 +189,10 @@ function registerQuestion(newQuestion, callback) {
                     callback(null, newQuestion);
                 });
             });
+
             function insertQuestion(callback) {
+
+                var sql_insert_question = 'insert into question(questioner_id, answerner_id, price, date, content) values(?, ?, ?, ?, ?) ';
                 dbConn.query(sql_insert_question, [newQuestion.questionerId, newQuestion.answernerId, newQuestion.price, newQuestion.date, newQuestion.content], function (err, result) {
                     if (err) {
                         return callback(err);
@@ -221,6 +204,7 @@ function registerQuestion(newQuestion, callback) {
             }
 
             function updateMyPoint(callback) {
+                var sql_update_my_point = 'update user set point = (point - ?) where id = ? ';
                 dbConn.query(sql_update_my_point, [newQuestion.price, newQuestion.questionerId], function (err, result) {
                     if (err) {
                         return callback(err);
@@ -229,7 +213,8 @@ function registerQuestion(newQuestion, callback) {
                 });
             }
 
-            function updateTempPoint(callback) {
+            function insertTempPoint(callback) {
+                var sql_update_temp_point = 'insert into transmission(user_id, question_id, temp_money) values(?, ?, ?)';
                 dbConn.query(sql_update_temp_point, [newQuestion.questionerId, newQuestion.insertId, newQuestion.price], function (err, result) {
                     if (err) {
                         return callback(err);
