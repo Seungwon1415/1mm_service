@@ -5,9 +5,11 @@ var path = require('path');
 var async = require('async');
 var isSecure = require('./common').isSecure;
 var User = require('../models/user');
+var logger = require('../common/logger');
 
 // 팔로잉 랜덤 추천, 기부랭킹, 검색 추천 연예인, 검색
 router.get('/', function (req, res, next) {
+    logger.log('info', '%s %s://%s%s', req.method, req.protocol, req.headers['host'], req.originalUrl);
     var type = parseInt(req.query.type, 10);
     console.log(type);
     if (type === 0) { // type 0일경우 팔로잉 추천
@@ -62,6 +64,7 @@ router.get('/', function (req, res, next) {
 
 // 내 페이지 조회 & 아이디 중복 체크
 router.get('/me', function (req, res, next) {
+    logger.log('info', '%s %s://%s%s', req.method, req.protocol, req.headers['host'], req.originalUrl);
     // 동적 파라미터로 me가 들어오면 내 정보를 조회
     if (req.query.nickname) {
         var nickname = req.query.nickname;
@@ -87,8 +90,39 @@ router.get('/me', function (req, res, next) {
     }
 });
 
+// 회원 포인트, 기부금 조회
+router.get('/point', function(req, res, next) {
+    logger.log('info', '%s %s://%s%s', req.method, req.protocol, req.headers['host'], req.originalUrl);
+    var type = parseInt(req.query.type, 10);
+    var id = req.user.id;
+
+    if(type === 0) {
+        User.showSavedPoint(id, function(err, results){
+            if (err) {
+                return next(err);
+            }
+            res.send({
+                result: results
+            });
+        });
+    }
+    else if(type === 1) {
+        User.showDonationPoint(id, function(err, results) {
+            if (err) {
+                return next(err);
+            }
+            res.send({
+                result: results
+            });
+        });
+    }
+});
+
+
+
 // 상대방 페이지 조회
 router.get('/:uid', function (req, res, next) {
+    logger.log('info', '%s %s://%s%s', req.method, req.protocol, req.headers['host'], req.originalUrl);
     // 동적 파라미터로 회원 id가 들어오면 회원 정보를 조회
     var myId = req.user.id;
     var yourId = parseInt(req.params.uid, 10);
@@ -104,38 +138,26 @@ router.get('/:uid', function (req, res, next) {
     });
 });
 
-// 나도듣기 보관함
-router.get('/me/answer', function (req, res, next) {
-    var id = req.user.id;
-    User.ShowPayedAnswerList(id, page);
-});
 
 // 프로필 수정
 // 0 = 프로필 수정, 1 = photo 수정 삭제, 2 = donation 수정
 router.put('/me', function (req, res, next) {
+    logger.log('info', '%s %s://%s%s', req.method, req.protocol, req.headers['host'], req.originalUrl);
 
     var id = req.user.id;
     var type = parseInt(req.query.type, 10);
+    var newProfile = {};
 
     if (type === 0) { // 0일 경우 프로필 수정
-        var form = new formidable.IncomingForm();
-        form.uploadDir = path.join(__dirname, '../uploads/user/voices');
-        form.keepExtensions = true;
-        form.multiples = true;
 
-        form.parse(req, function (err, fields, files) {
-            if (err) {
-                return next(err);
+        if (req.headers['content-type'] === 'application/x-www-form-urlencoded') {
+            newProfile.nickname = req.body.nickname ;
+            newProfile.name = req.body.name;
+            if(req.body.stateMessage !== 'null') {
+                newProfile.stateMessage = req.body.stateMessage;
             }
 
-            var newProfile = {};
-            newProfile.id = id;
-            newProfile.nickname = fields.nickname;
-            newProfile.name = fields.name;
-            newProfile.state_message = fields.state_message;
-            newProfile.voice_message = path.basename(files.voice_message.path); //voice_message는 file이기 때문에 basename을 저장
-
-            User.updateProfile(newProfile, function (err) {
+            User.updateProfile(id, newProfile, function (err) {
                 if (err) {
                     return next(err);
                 }
@@ -143,7 +165,36 @@ router.put('/me', function (req, res, next) {
                     result: "프로필 수정을 완료하였습니다."
                 });
             });
-        });
+
+        } else {
+            var form = new formidable.IncomingForm();
+            form.uploadDir = path.join(__dirname, '../uploads/user/voices');
+            form.keepExtensions = true;
+            form.multiples = true;
+
+            form.parse(req, function (err, fields, files) {
+                if (err) {
+                    return next(err);
+                }
+
+                newProfile.nickname = fields.nickname;
+                newProfile.name = fields.name;
+                newProfile.stateMessage = fields.stateMessage;
+                newProfile.voiceMessage = path.basename(files.voiceMessage.path); //voice_message는 file이기 때문에 basename을 저장
+
+                User.updateProfile(id, newProfile, function (err) {
+                    if (err) {
+                        return next(err);
+                    }
+                    res.send({
+                        result: "프로필 수정을 완료하였습니다."
+                    });
+                });
+            });
+        }
+
+
+
     } else if (type === 1) { // 1일 경우 프로필 사진만 수정
         var form = new formidable.IncomingForm();
         form.uploadDir = path.join(__dirname, '../uploads/user/photos');
@@ -194,6 +245,7 @@ router.put('/me', function (req, res, next) {
 
 // 내 페이지 질문 목록
 router.get('/me/questions', function (req, res, next) {
+    logger.log('info', '%s %s://%s%s', req.method, req.protocol, req.headers['host'], req.originalUrl);
     var id = req.user.id;
     var pageNo = parseInt(req.query.pageNo, 10);
     var count = parseInt(req.query.count, 10);
@@ -223,6 +275,7 @@ router.get('/me/questions', function (req, res, next) {
 
 // 내 팔로우 등록
 router.post('/me/follows', function (req, res, next) {
+    logger.log('info', '%s %s://%s%s', req.method, req.protocol, req.headers['host'], req.originalUrl);
     var myId = req.user.id;
     var userId = req.body.userId;
 
@@ -240,6 +293,7 @@ router.post('/me/follows', function (req, res, next) {
 
 // 팔로우 취소
 router.delete('/:uid/follows', function (req, res, next) {
+    logger.log('info', '%s %s://%s%s', req.method, req.protocol, req.headers['host'], req.originalUrl);
     var follow = {};
     follow.myId = req.user.id;
     follow.uid = parseInt(req.params.uid, 10);
@@ -257,6 +311,7 @@ router.delete('/:uid/follows', function (req, res, next) {
 
 // 내 팔로우 목록 조회
 router.get('/me/follows', function (req, res, next) {
+    logger.log('info', '%s %s://%s%s', req.method, req.protocol, req.headers['host'], req.originalUrl);
     var pageNo = parseInt(req.query.pageNo, 10);
     var count = parseInt(req.query.count, 10);
     var id = req.user.id;
@@ -282,8 +337,40 @@ router.get('/me/follows', function (req, res, next) {
     }
 });
 
+// 음성 프로필 스트리밍
+router.get('/:uid/voice', function(req, res, next) {
+    logger.log('info', '%s %s://%s%s', req.method, req.protocol, req.headers['host'], req.originalUrl);
+    var uid = req.params.uid;
+    var id = req.user.id;
+
+    if(req.params.uid === 'me') {
+        User.streamingMyProfile(id, function(err, results) {
+            if (err) {
+                return next(err);
+            }
+            res.send({
+                result:results
+            });
+        });
+    }else {
+        User.streamingYourProfile(uid, function(err, results) {
+            if (err) {
+                return next(err);
+            }
+            res.send({
+                result:results
+            });
+        });
+    }
+});
+
+
+
+
+
 // 상대방 팔로우 목록
 router.get('/:uid/follows', function (req, res, next) {
+    logger.log('info', '%s %s://%s%s', req.method, req.protocol, req.headers['host'], req.originalUrl);
     var pageNo = parseInt(req.query.pageNo, 10);
     var count = parseInt(req.query.count, 10);
     var myId = req.user.id;
@@ -312,11 +399,12 @@ router.get('/:uid/follows', function (req, res, next) {
 
 // 상대방 페이지 질문 목록
 router.get('/:uid/questions', function (req, res, next) {
+    logger.log('info', '%s %s://%s%s', req.method, req.protocol, req.headers['host'], req.originalUrl);
     var pageNo = parseInt(req.query.pageNo, 10);
     var count = parseInt(req.query.count, 10);
     var type = parseInt(req.query.type, 10);
     var myId = req.user.id;
-    var yourId = parseInt(req.params.uid, 10)
+    var yourId = parseInt(req.params.uid, 10);
 
     if (req.query.direction === 'to') {
         User.showYourSendQuestions(myId, yourId, type, pageNo, count, function (err, results) {
@@ -338,6 +426,11 @@ router.get('/:uid/questions', function (req, res, next) {
         });
     }
 });
+
+
+
+
+
 
 
 module.exports = router;

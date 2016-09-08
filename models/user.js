@@ -1,7 +1,9 @@
 var async = require('async');
 var fs = require('fs');
 var path = require('path');
-var dbPool = require('../models/common').dbPool;
+var dbPool = require('../common/dbpool');
+var path = require('path');
+var url = require('url');
 
 // 유저가 존재하는지 찾는 함수
 function findUser(id, callback) {
@@ -9,14 +11,16 @@ function findUser(id, callback) {
         "select id " +
         "from user " +
         "where id = ?";
-
+    dbPool.logStatus();
     dbPool.getConnection(function (err, dbConn) {
         if (err) {
             dbConn.release();
+            dbPool.logStatus();
             return callback(err);
         }
         dbConn.query(sql_search_user, [id], function (err, results) {
             dbConn.release();
+            dbPool.logStatus();
             if (err) {
                 return callback(err);
             }
@@ -41,7 +45,7 @@ function findOrCreate(profile, callback) {
 
     //회원을 등록하는 쿼리
     var sql_insert_auth_info = "insert into user(auth_id, auth_type) values(?, ?)";
-
+    dbPool.logStatus();
     dbPool.getConnection(function (err, dbConn) {
         if (err) {
             return callback(err);
@@ -49,11 +53,13 @@ function findOrCreate(profile, callback) {
         dbConn.query(sql_search_id, [profile.id], function (err, results) {
             if (err) {
                 dbConn.release();
+                dbPool.logStatus();
                 return callback(err);
             }
             //results.length가 0이 아니면 회원이 있다는 소리이므로 유제 객체를 반환
             if (results.length !== 0) {
                 dbConn.release();
+                dbPool.logStatus();
                 var user = {};
                 user.id = results[0].id;
                 return callback(null, user);
@@ -61,6 +67,7 @@ function findOrCreate(profile, callback) {
             //등록된 유저가 없으면 회원을 등록
             dbConn.query(sql_insert_auth_info, [profile.id, profile.provider], function (err, result) {
                 dbConn.release();
+                dbPool.logStatus();
                 if (err) {
                     return callback(err);
                 }
@@ -79,13 +86,14 @@ function findOrCreate(profile, callback) {
 function searchRecommend(callback) {
     // 최근에 가입한 연예인을 조회하는 쿼리
     var sql = 'SELECT id userId, name FROM user ORDER BY join_time DESC LIMIT 15';
-
+    dbPool.logStatus();
     dbPool.getConnection(function (err, dbConn) {
         if (err) {
             return callback(err);
         }
         dbConn.query(sql, function (err, results) {
             dbConn.release();
+            dbPool.logStatus();
             if (err) {
                 return callback(err);
             }
@@ -97,12 +105,15 @@ function searchRecommend(callback) {
 function checkNickname(nickname, callback) {
 
     var sql_search_ninkname = 'select nickname from user where nickname = ?';
+
+    dbPool.logStatus();
     dbPool.getConnection(function (err, dbConn) {
         if (err) {
             return callback(err);
         }
         dbConn.query(sql_search_ninkname, [nickname], function (err, results) {
             dbConn.release();
+            dbPool.logStatus();
             if (err) {
                 return callback(err);
             }
@@ -120,13 +131,13 @@ function checkNickname(nickname, callback) {
 function showMyInfo(id, callback) {
     // 내페이지 조회 쿼리
     var sql =
-        'select u.id, u.nickname, u.name, u.photo, u.state_message, d.id donationId, d.name donationName ' +
+        'select u.id, u.nickname, u.name, u.photo, u.state_message stateMessage, u.voice_message voiceMessage, d.id donationId, d.name donationName ' +
         'from user u left outer join donation d on(u.donation_id = d.id) ' +
         'where u.id = ?';
 
     var following = 0;
     var follower = 0;
-
+    dbPool.logStatus();
     dbPool.getConnection(function (err, dbConn) {
         if (err) {
             return callback(err);
@@ -151,6 +162,8 @@ function showMyInfo(id, callback) {
                         return callback(err);
                     }
                     var userphotos = process.env.HTTP_HOST + "/userphotos/";
+                    var uservoiceMessage = process.env.HTTP_HOST + "/avs/";
+                    results[0].voiceMessage = uservoiceMessage + results[0].voiceMessage;
                     results[0].photo = userphotos + results[0].photo;
                     results[0].following = following;
                     results[0].follower = follower;
@@ -203,7 +216,7 @@ function showYourInfo(myId, yourId, callback) {
     var followInfo; //상대방이 내가 팔로잉 했는 사람인지 아닌지 알기 위한 변수
     var following = 0;
     var follower = 0;
-
+    dbPool.logStatus();
     dbPool.getConnection(function (err, dbConn) {
         if (err) {
             return callback(err);
@@ -217,6 +230,7 @@ function showYourInfo(myId, yourId, callback) {
             }
             dbConn.query(sql, [yourId], function (err, results) {
                 dbConn.release();
+                dbPool.logStatus();
                 if (err) {
                     return callback(err);
                 }
@@ -247,7 +261,6 @@ function showYourInfo(myId, yourId, callback) {
                 "from following " +
                 "where user_id = ? and following_id = ? ";
 
-            console.log("dafsdfasdfasdfasdfasdfasdfasdf");
             dbConn.query(sql, [myId, yourId], function (err, results) {
                 if (err) {
                     return callback(err);
@@ -296,13 +309,14 @@ function showYourInfo(myId, yourId, callback) {
 function recommendFollowing(callback) {
     //랜덤으로 회원 정보를 뽑는 쿼리
     var sql = 'SELECT id userId, name, photo FROM user WHERE celebrity =1 ORDER BY rand() LIMIT 12';
-
+    dbPool.logStatus();
     dbPool.getConnection(function (err, dbConn) {
         if (err) {
             return callback(err);
         }
         dbConn.query(sql, function (err, results) {
             dbConn.release();
+            dbPool.logStatus();
             if (err) {
                 return callback(err);
             }
@@ -337,13 +351,14 @@ function donationRank(callback) {
         'where u.celebrity = 1 ' +
         'group by u.name ' +
         'order by sum(price) desc limit 5 ';
-
+    dbPool.logStatus();
     dbPool.getConnection(function (err, dbConn) {
         if (err) {
             return callback(err);
         }
         dbConn.query(sql, function (err, results) {
             dbConn.release();
+            dbPool.logStatus();
             if (err) {
                 return callback(err);
             }
@@ -367,47 +382,57 @@ function donationRank(callback) {
 
 
 // 프로필 수정하는 함수
-function updateProfile(profile, callback) {
-    console.log(profile);
+function updateProfile(id, newProfile, callback) {
 
     // 음성 파일이 있는지 없는지 체크하는 쿼리
     var sql_select_voice_message =
-        'select voice_message ' +
+        'select voice_message voiceMessage ' +
         'from user ' +
         'where id = ?';
 
     // 프로필 수정하는 쿼리
     var sql_update_profile =
         'update user ' +
-        'set nickname = ?, name = ?, state_message = ?, voice_message = ? ' +
+        'set ? ' +
         'where id = ?';
 
+    var profile = {};
+    profile.nickname = newProfile.nickname;
+    profile.name = newProfile.name;
+    profile.state_message = newProfile.stateMessage;
+    profile.voice_message = newProfile.voiceMessage;
+
+    dbPool.logStatus();
     dbPool.getConnection(function (err, dbConn) {
         if (err) {
             return callback(err);
         }
 
         // 프로필을 select해서 있는지 없는지 확인
-        dbConn.query(sql_select_voice_message, [profile.id], function (err, results) {
+        dbConn.query(sql_select_voice_message, [id], function (err, results) {
             if (err) {
                 dbConn.release();
+                dbPool.logStatus();
                 return callback(err);
             }
 
             // 파일이 없으면 프로필 수정
-            if (results[0].voice_message === null) {
+            if (results[0].voiceMessage === null) {
                 modifyProfile(function (err) {
                     if (err) {
                         dbConn.release();
+                        dbPool.logStatus();
                         return callback(err);
                     }
                     dbConn.release();
+                    dbPool.logStatus();
                     callback(null);
                 });
             } else { // 파일이 있으면 프로필 수정하고 기존의 파일 삭제
                 dbConn.beginTransaction(function (err) {
                     if (err) {
                         dbConn.release();
+                        dbPool.logStatus();
                         return callback(err);
                     }
                     async.series([modifyProfile, deleteOriginalFile], function (err, results) {
@@ -415,6 +440,7 @@ function updateProfile(profile, callback) {
                             //에러가 있으면 롤백
                             return dbConn.rollback(function () {
                                 dbConn.release();
+                                dbPool.logStatus();
                                 callback(err);
                             });
                         }
@@ -422,6 +448,7 @@ function updateProfile(profile, callback) {
                         dbConn.commit(function () {
                             callback(null);
                             dbConn.release();
+                            dbPool.logStatus();
                         });
                     });
                 });
@@ -429,12 +456,11 @@ function updateProfile(profile, callback) {
 
             // 프로필 수정 함수
             function modifyProfile(done) {
-                console.log(profile.voice_message);
-                console.log(profile.id);
-                dbConn.query(sql_update_profile, [profile.nickname, profile.name, profile.state_message, profile.voice_message, profile.id], function (err, result) {
+                dbConn.query(sql_update_profile, [profile, id], function (err, result) {
                     if (err) {
                         return done(err);
                     }
+
                     done(null);
                 });
             }
@@ -444,10 +470,9 @@ function updateProfile(profile, callback) {
                 if (err) {
                     return done(err);
                 }
-
                 var filePath = path.join(__dirname, '../uploads/user/voices/');
                 // 실제 경로를 찾아줘서 삭제
-                fs.unlink(path.join(filePath, results[0].voice_message), function (err) {
+                fs.unlink(path.join(filePath, results[0].voiceMessage), function (err) {
                     if (err) {
                         return done(err);
                     }
@@ -482,6 +507,7 @@ function updatePhoto(newPhoto, callback) {
         dbConn.query(sql_select_photo, [newPhoto.id], function (err, results) {
             if (err) {
                 dbConn.release();
+                dbPool.logStatus();
                 return callback(err);
             }
 
@@ -490,15 +516,18 @@ function updatePhoto(newPhoto, callback) {
                 modifyPhoto(function (err) {
                     if (err) {
                         dbConn.release();
+                        dbPool.logStatus();
                         return callback(err);
                     }
                     dbConn.release();
+                    dbPool.logStatus();
                     callback(null);
                 });
             } else { // 사진이 있으면 수정하고 기존의 파일 삭제
                 dbConn.beginTransaction(function (err) {
                     if (err) {
                         dbConn.release();
+                        dbPool.logStatus();
                         return callback(err);
                     }
                     async.series([modifyPhoto, deleteOriginalFile], function (err, results) {
@@ -506,6 +535,7 @@ function updatePhoto(newPhoto, callback) {
                             // 에러가 있으면 롤백
                             return dbConn.rollback(function () {
                                 dbConn.release();
+                                dbPool.logStatus();
                                 callback(err);
                             });
                         }
@@ -513,6 +543,7 @@ function updatePhoto(newPhoto, callback) {
                         dbConn.commit(function () {
                             callback(null);
                             dbConn.release();
+                            dbPool.logStatus();
                         });
                     });
                 });
@@ -560,7 +591,7 @@ function deletePhoto(id, callback) {
         'update user ' +
         'set photo = null ' +
         'where id = ?';
-
+    dbPool.logStatus();
     dbPool.getConnection(function (err, dbConn) {
         if (err) {
             return callback(err);
@@ -568,11 +599,13 @@ function deletePhoto(id, callback) {
         dbConn.query(sql_search_photo, [id], function (err, results) {
             if (err) {
                 dbConn.release();
+                dbPool.logStatus();
                 return callback(err);
             }
             // 셀렉한 사진이 없으면 삭제 할것이 없다고 말해줌
             if (results[0].photo === null) {
                 dbConn.release();
+                dbPool.logStatus();
                 return callback(null, 0); //0은 삭제할 사진이 없다는걸 의미
             }
 
@@ -580,18 +613,21 @@ function deletePhoto(id, callback) {
             dbConn.beginTransaction(function (err) {
                 if (err) {
                     dbConn.release();
+                    dbPool.logStatus();
                     return callback(err);
                 }
                 async.series([modifyPhoto, deleteOriginalFile], function (err, results) {
                     if (err) {
                         return dbConn.rollback(function () {
                             dbConn.release();
+                            dbPool.logStatus();
                             callback(err);
                         });
                     }
 
                     dbConn.commit(function () {
                         dbConn.release();
+                        dbPool.logStatus();
                         callback(null, 1); // 1은 파일이 있어서 삭제한다는 의미
                     });
                 });
@@ -629,13 +665,14 @@ function updateDonation(id, donationId, callback) {
         'update user ' +
         'set donation_id = ? ' +
         'where id = ? ';
-
+    dbPool.logStatus();
     dbPool.getConnection(function (err, dbConn) {
         if (err) {
             return callback(err);
         }
         dbConn.query(sql_update_donation, [donationId, id], function (err, result) {
             dbConn.release();
+            dbPool.logStatus();
             if (err) {
                 return callback(err);
             }
@@ -653,10 +690,11 @@ function searchUser(word, pageNo, count, callback) {
         'from user ' +
         'where nickname like ? or name like ? ' +
         'limit ?,?';
-
+    dbPool.logStatus();
     dbPool.getConnection(function (err, dbConn) {
         dbConn.query(sql_search_word, [queryWord, queryWord, count * (pageNo - 1), count], function (err, results) {
             dbConn.release();
+            dbPool.logStatus();
             if (err) {
                 return callback(err);
             }
@@ -681,7 +719,7 @@ function registerFollow(myId, yourId, callback) {
     var sql =
         'insert into following(user_id, following_id) values(?, ?)';
 
-
+    dbPool.logStatus();
     dbPool.getConnection(function (err, dbConn) {
         if (err) {
             return callback(err);
@@ -706,6 +744,7 @@ function registerFollow(myId, yourId, callback) {
                     });
                 }, function (err) {
                     dbConn.release();
+                    dbPool.logStatus();
                     if (err) {
                         return callback(err);
                     }
@@ -715,6 +754,7 @@ function registerFollow(myId, yourId, callback) {
         } else {
             dbConn.query(sql, [myId, yourId], function (err, result) {
                 dbConn.release();
+                dbPool.logStatus();
                 if (err) {
                     return callback(err);
                 }
@@ -727,13 +767,14 @@ function registerFollow(myId, yourId, callback) {
 // 팔로우 취소
 function cancleFollow(follow, callback) {
     var sql = 'DELETE FROM following WHERE user_id = ? and following_id = ? ';
-
+    dbPool.logStatus();
     dbPool.getConnection(function (err, dbConn) {
         if (err) {
             return callback(err);
         }
         dbConn.query(sql, [follow.myId, follow.uid], function (err, result) {
             dbConn.release();
+            dbPool.logStatus();
             if (err) {
                 return callback(err);
             }
@@ -759,12 +800,13 @@ function showMySendQuestions(id, answer, pageNo, count, callback) {
         'join user us on(q.answerner_id = us.id) ' +
         'where q.questioner_id = ? ' +
         'limit ?, ?';
-
+    dbPool.logStatus();
     dbPool.getConnection(function (err, dbConn) {
 
         if (answer === 0) {
             dbConn.query(sql_incomplete_answer, [id, (pageNo - 1) * count, count], function (err, results) {
                 dbConn.release();
+                dbPool.logStatus();
                 if (err) {
                     return callback(err);
                 }
@@ -786,6 +828,7 @@ function showMySendQuestions(id, answer, pageNo, count, callback) {
         } else if (answer === 1) {
             dbConn.query(sql_complete_answer, [id, (pageNo - 1) * count, count], function (err, results) {
                 dbConn.release();
+                dbPool.logStatus();
                 if (err) {
                     return callback(err);
                 }
@@ -827,11 +870,12 @@ function showMyReceiveQuestions(id, answer, pageNo, count, callback) {
         'join user us on(q.answerner_id = us.id) ' +
         'where q.answerner_id = ? ' +
         'limit ?, ?';
-
+    dbPool.logStatus();
     dbPool.getConnection(function (err, dbConn) {
         if (answer === 0) {
             dbConn.query(sql_incomplete_answer, [id, (pageNo - 1) * count, count], function (err, results) {
                 dbConn.release();
+                dbPool.logStatus();
                 if (err) {
                     return callback(err);
                 }
@@ -850,6 +894,7 @@ function showMyReceiveQuestions(id, answer, pageNo, count, callback) {
         } else if (answer === 1) {
             dbConn.query(sql_complete_answer, [id, (pageNo - 1) * count, count], function (err, results) {
                 dbConn.release();
+                dbPool.logStatus();
                 if (err) {
                     return callback(err);
                 }
@@ -882,13 +927,14 @@ function showMyFollowing(id, pageNo, count, callback) {
         'JOIN user us on(us.id = f.user_id) ' +
         'WHERE f.user_id = ? ' +
         'LIMIT ?, ? ';
-
+    dbPool.logStatus();
     dbPool.getConnection(function (err, dbConn) {
         if (err) {
             return callback(err);
         }
         dbConn.query(sql, [id, (pageNo - 1) * count, count], function (err, results) {
             dbConn.release();
+            dbPool.logStatus();
             if (err) {
                 return (callback);
             }
@@ -927,13 +973,14 @@ function showMyFollower(id, pageNo, count, callback) {
         'join user us on(us.id = f.user_id) ' +
         'where f.user_id = ?)b ' +
         'on (a.yourfollower = b.myfollowing) limit ?, ? ';
-
+    dbPool.logStatus();
     dbPool.getConnection(function (err, dbConn) {
         if (err) {
             return callback(err);
         }
         dbConn.query(sql_myFollowerList, [id, id, id, (pageNo - 1) * count, count], function (err, results) {
             dbConn.release();
+            dbPool.logStatus();
             if (err) {
                 return callback(err);
             }
@@ -974,13 +1021,14 @@ function showYourFollowing(myId, yourId, pageNo, count, callback) {
         'JOIN user us on(us.id = f.user_id) ' +
         'WHERE f.user_id = ? ' +
         'LIMIT ?, ? ';
-
+    dbPool.logStatus();
     dbPool.getConnection(function (err, dbConn) {
         if (err) {
             return callback(err);
         }
         dbConn.query(sql, [yourId, (pageNo - 1) * count, count], function (err, results) {
             dbConn.release();
+            dbPool.logStatus();
             if (err) {
                 return (callback);
             }
@@ -1006,13 +1054,14 @@ function showYourFollower(myId, yourId, pageNo, count, callback) {
         'join user us on(us.id = f.user_id) ' +
         'where f.user_id = ?)b ' +
         'on (a.yourfollower = b.myfollowing) limit ?, ? ';
-
+    dbPool.logStatus();
     dbPool.getConnection(function (err, dbConn) {
         if (err) {
             return callback(err);
         }
         dbConn.query(sql_yourFollowerList, [yourId, yourId, myId, (pageNo - 1) * count, count], function (err, results) {
             dbConn.release();
+            dbPool.logStatus();
             if (err) {
                 return callback(err);
             }
@@ -1029,7 +1078,6 @@ function showYourFollower(myId, yourId, pageNo, count, callback) {
                 }
                 async.each(results, function (item, callback) {
                     var userphotos = process.env.HTTP_HOST + "/userphotos/";
-                    ;
 
                     item.photo = userphotos + item.photo;
                     callback(null);
@@ -1075,7 +1123,7 @@ function showYourSendQuestions(myId, yourId, type, pageNo, count, callback) {
         'limit ?, ? ';
 
     var userphotos = process.env.HTTP_HOST + "/userphotos/";
-
+    dbPool.logStatus();
     dbPool.getConnection(function (err, dbConn) {
         if (err) {
             return callback(err);
@@ -1083,6 +1131,7 @@ function showYourSendQuestions(myId, yourId, type, pageNo, count, callback) {
         if (type === 0) {  // 나도듣기 순
             dbConn.query(sql_orderby_listenCount, [yourId, myId, count * (pageNo - 1), count], function (err, results) {
                 dbConn.release();
+                dbPool.logStatus();
                 if (err) {
                     return callback(err);
                 }
@@ -1108,6 +1157,7 @@ function showYourSendQuestions(myId, yourId, type, pageNo, count, callback) {
         else if (type === 1) {  // 최신 순
             dbConn.query(sql_orderby_new, [yourId, myId, count * (pageNo - 1), count], function (err, results) {
                 dbConn.release();
+                dbPool.logStatus();
                 if (err) {
                     return callback(err);
                 }
@@ -1164,7 +1214,7 @@ function showYourReceiveQuestions(myId, yourId, type, pageNo, count, callback) {
         'limit ?, ? ';
 
     var userphotos = process.env.HTTP_HOST + "/userphotos/";
-
+    dbPool.logStatus();
     dbPool.getConnection(function (err, dbConn) {
         if (err) {
             return callback(err);
@@ -1172,6 +1222,7 @@ function showYourReceiveQuestions(myId, yourId, type, pageNo, count, callback) {
         if (type === 0) {  // 나도듣기 순
             dbConn.query(sql_orderby_listenCount, [yourId, myId, count * (pageNo - 1), count], function (err, results) {
                 dbConn.release();
+                dbPool.logStatus();
                 if (err) {
                     return callback(err);
                 }
@@ -1198,6 +1249,7 @@ function showYourReceiveQuestions(myId, yourId, type, pageNo, count, callback) {
         else if (type === 1) {  // 최신 순
             dbConn.query(sql_orderby_new, [yourId, myId, count * (pageNo - 1), count], function (err, results) {
                 dbConn.release();
+                dbPool.logStatus();
                 if (err) {
                     return callback(err);
                 }
@@ -1223,6 +1275,99 @@ function showYourReceiveQuestions(myId, yourId, type, pageNo, count, callback) {
     });
 }
 
+// 회원 포인트 조회
+function showSavedPoint(id, callback) {
+    var sql_search_point =
+        'select point, pay_total, listening_profit, question_cost, listening_cost, withdraw_total ' +
+        'from user ' +
+        'where id = ?';
+    dbPool.logStatus();
+    dbPool.getConnection(function (err, dbConn) {
+        dbConn.query(sql_search_point, [id], function (err, results) {
+            dbConn.release();
+            dbPool.logStatus();
+            if (err) {
+                return callback(err);
+            }
+            callback(null, results[0]);
+        });
+    });
+}
+
+
+// 회원 기부금 조회
+function showDonationPoint(id, callback) {
+    var sql = 'select b.totalDonation, c.monthlyDonation ' +
+        'from (select sum(q.price*0.5) totalDonation, q.answerner_id answernerId ' +
+        'from question q join answer a on(q.id = a.question_id) ' +
+        'where q.answerner_id =1)b ' +
+        'join (select sum(q.price*0.5) monthlyDonation, q.answerner_id answernerId ' +
+        'from question q join answer a on(q.id = a.question_id) ' +
+        'where q.answerner_id =1 and month(a.date) = (select month(now())))c ' +
+        'on (b.answernerId = c.answernerId)';
+    dbPool.logStatus();
+    dbPool.getConnection(function(err, dbConn) {
+        if (err) {
+            return callback(err);
+        }
+        dbConn.query(sql, [id], function(err, results) {
+            dbConn.release();
+            dbPool.logStatus();
+            if (err) {
+                return callback(err);
+            }
+            callback(null, results[0]);
+        });
+    });
+}
+
+// 내 프로필 스트리밍
+function streamingMyProfile(id, callback) {
+    var sql = 'select voice_message voiceMessage from user where id = ? ';
+
+    dbPool.logStatus();
+    dbPool.getConnection(function(err, dbConn) {
+        if (err) {
+            return callback(err);
+        }
+        dbConn.query(sql, [id], function(err, results) {
+            dbConn.release();
+            dbPool.logStatus();
+            if (err) {
+                return callback(err);
+            }
+            var filename =results[0].voiceMessage;
+            console.log(filename);
+            results[0].fileurl = url.resolve('http://127.0.0.1:80', '/avs/' +filename);
+            callback(null, results[0]);
+        })
+    })
+}
+
+// 상대방 프로필 스트리밍
+function streamingYourProfile(uid, callback) {
+    var sql = 'select voice_message voiceMessage from user where id = ? ';
+
+    dbPool.logStatus();
+    dbPool.getConnection(function(err, dbConn) {
+        if (err) {
+            return callback(err);
+        }
+        dbConn.query(sql, [uid], function(err, results) {
+            dbConn.release();
+            dbPool.logStatus();
+            if (err) {
+                return callback(err);
+            }
+            var filename =results[0].voiceMessage;
+            console.log(filename);
+            results[0].fileurl = url.resolve('http://127.0.0.1:80', '/avs/' +filename);
+            callback(null, results[0]);
+        })
+    })
+
+}
+
 module.exports.findUser = findUser;
 module.exports.findOrCreate = findOrCreate;
 module.exports.searchRecommend = searchRecommend;
@@ -1246,3 +1391,7 @@ module.exports.showYourFollowing = showYourFollowing;
 module.exports.showYourFollower = showYourFollower;
 module.exports.showYourSendQuestions = showYourSendQuestions;
 module.exports.showYourReceiveQuestions = showYourReceiveQuestions;
+module.exports.showDonationPoint = showDonationPoint;
+module.exports.showSavedPoint = showSavedPoint;
+module.exports.streamingMyProfile = streamingMyProfile;
+module.exports.streamingYourProfile = streamingYourProfile;

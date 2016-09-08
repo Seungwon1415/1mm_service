@@ -1,9 +1,10 @@
 var express = require('express');
 var router = express.Router();
 var Pay = require('../models/pay');
-
+var logger = require('../common/logger');
 
 router.post('/', function (req, res, next) {
+    logger.log('info', '%s %s://%s%s', req.method, req.protocol, req.headers['host'], req.originalUrl);
 
     var listeningPay = {};
     listeningPay.answerId = parseInt(req.body.answerId, 10);

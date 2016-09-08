@@ -1,5 +1,5 @@
 var async = require('async');
-var dbPool = require('./common').dbPool;
+var dbPool = require('../common/dbpool');
 
 // 기부처 조회 함수
 function listDonation(pageNo, count, callback) {
@@ -8,10 +8,11 @@ function listDonation(pageNo, count, callback) {
         'select id donationId, name, photo, description ' +
         'from donation ' +
         'limit ?,?';
-
+    dbPool.logStatus();
     dbPool.getConnection(function (err, dbConn) {
         dbConn.query(sql_search_donation, [count * (pageNo - 1), count], function (err, results) {
             dbConn.release();
+            dbPool.logStatus();
             if (err) {
                 return callback(err);
             }
@@ -39,10 +40,11 @@ function showDonation(donationId, callback) {
         'select id donationId, name, photo, description ' +
         'from donation ' +
         'where id = ?';
-
+    dbPool.logStatus();
     dbPool.getConnection(function (err, dbConn) {
         dbConn.query(sql_search_donation, [donationId], function (err, results) {
             dbConn.release();
+            dbPool.logStatus();
             if (err) {
                 return callback(err);
             }

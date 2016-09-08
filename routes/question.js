@@ -2,9 +2,12 @@ var express = require('express');
 var router = express.Router();
 var isSecure = require('./common').isSecure;
 var Question = require('../models/question');
+var logger = require('../common/logger');
+
 
 // 인기 질문 리스트
 router.get('/popular10', function (req, res, next) {
+    logger.log('info', '%s %s://%s%s', req.method, req.protocol, req.headers['host'], req.originalUrl);
     var type = parseInt(req.query.type, 10);
     var id = req.user.id;
 
@@ -36,6 +39,7 @@ router.get('/popular10', function (req, res, next) {
 
 // 팔로잉 질문 리스트, 나도 듣기 보관함
 router.get('/', function (req, res, next) {
+    logger.log('info', '%s %s://%s%s', req.method, req.protocol, req.headers['host'], req.originalUrl);
     var type = parseInt(req.query.type, 10);
     var pageNo = parseInt(req.query.pageNo, 10);
     var count = parseInt(req.query.count, 10);
@@ -65,6 +69,9 @@ router.get('/', function (req, res, next) {
 
 // 질문하기
 router.post('/', function (req, res, next) {
+    logger.log('info', '%s %s://%s%s', req.method, req.protocol, req.headers['host'], req.originalUrl);
+
+    var id = req.user.id;
     var newQuestion = {};
     newQuestion.questionerId = req.user.id;
     newQuestion.answernerId = parseInt(req.body.answernerId, 10);
@@ -72,7 +79,7 @@ router.post('/', function (req, res, next) {
     newQuestion.date = req.body.date;
     newQuestion.content = req.body.content;
 
-    Question.registerQuestion(newQuestion, function (err, result) {
+    Question.registerQuestion(id, newQuestion, function (err, result) {
         if (err) {
             return next(err);
         }

@@ -1,10 +1,12 @@
 var async = require('async');
-var dbPool = require('../models/common').dbPool;
+var dbPool = require('../common/dbpool');
+var path = require('path');
+var url = require('url');
 
 function registerAnswer(newAnswer, callback) {
 
     console.log(newAnswer);
-
+    dbPool.logStatus();
     dbPool.getConnection(function (err, dbConn) {
         dbConn.beginTransaction(function (err) {
             if (err) {
@@ -15,6 +17,7 @@ function registerAnswer(newAnswer, callback) {
                 if (err) {
                     return dbConn.rollback(function () {
                         dbConn.release();
+                        dbPool.logStatus();
                         callback(err);
                     });
                 }
@@ -68,4 +71,39 @@ function registerAnswer(newAnswer, callback) {
     });
 }
 
+// 답변 스트리밍
+function streamingAnswer(id, aid, callback) {
+    var sql =
+        'select a.voice_content voiceContent from answer a join pay p on(a.id = p.answer_id) ' +
+        'where p.user_id = ? and p.answer_id = ? ';
+
+    dbPool.logStatus();
+    dbPool.getConnection(function(err, dbConn) {
+        if (err) {
+            return callback(err);
+        }
+        dbConn.query(sql, [id, aid], function(err, results) {
+
+            dbConn.release();
+            dbPool.logStatus();
+
+            if (err) {
+                return callback(err);
+            }
+
+            if (!results.length) {
+                return callback(null, null);
+            }
+            var filename =results[0].voiceContent;
+            results[0].fileurl = url.resolve('http://127.0.0.1:80', '/avs/' +filename);
+            callback(null, results[0]);
+        });
+    })
+}
+
+
+
+
+
 module.exports.registerAnswer = registerAnswer;
+module.exports.streamingAnswer = streamingAnswer;

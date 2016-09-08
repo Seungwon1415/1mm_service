@@ -1,5 +1,5 @@
 var async = require('async');
-var dbPool = require('../models/common').dbPool;
+var dbPool = require('../common/dbpool');
 
 // 회원 차단
 function registerBlock(blockingId, blockedId, callback) {

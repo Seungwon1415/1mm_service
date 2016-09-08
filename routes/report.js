@@ -1,9 +1,11 @@
 var express = require('express');
 var router = express.Router();
 var Report = require('../models/report');
+var logger = require('../common/logger');
 
 // 회원 신고
 router.post('/', function (req, res, next) {
+    logger.log('info', '%s %s://%s%s', req.method, req.protocol, req.headers['host'], req.originalUrl);
     var report = {};
     report.reportId = req.user.id;
     report.suspectId = parseInt(req.body.suspectId, 10);

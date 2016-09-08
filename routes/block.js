@@ -1,9 +1,10 @@
 var express = require('express');
 var router = express.Router();
 var Block = require('../models/block');
-
+var logger = require('../common/logger');
 // 회원 차단
 router.post('/', function (req, res, next) {
+    logger.log('info', '%s %s://%s%s', req.method, req.protocol, req.headers['host'], req.originalUrl);
     // 차단하는 사람ID, 차단 당하는 사람 ID
     var blockingId = req.user.id;
     var blockedId = parseInt(req.body.blockedId, 10);
@@ -19,6 +20,7 @@ router.post('/', function (req, res, next) {
 
 // 회원 차단 해제
 router.delete('/', function (req, res, next) {
+    logger.log('info', '%s %s://%s%s', req.method, req.protocol, req.headers['host'], req.originalUrl);
     // 차단하는 사람ID, 차단 당한 사람 ID
     var blockingId = req.user.id;
     var blockedId = parseInt(req.body.blockedId, 10);

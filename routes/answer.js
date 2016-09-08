@@ -3,8 +3,11 @@ var router = express.Router();
 var Answer = require('../models/answer');
 var formidable = require('formidable');
 var path = require('path');
+var logger = require('../common/logger');
 
+// 답변하기
 router.post('/', function (req, res, next) {
+    logger.log('info', '%s %s://%s%s', req.method, req.protocol, req.headers['host'], req.originalUrl);
 
     var form = new formidable.IncomingForm();
     form.uploadDir = path.join(__dirname, '../uploads/answer/voices');
@@ -29,8 +32,32 @@ router.post('/', function (req, res, next) {
             }
 
             res.send({
-                result: "답변 등록을 완료 하였습니다."
+                message: "답변 등록을 완료 하였습니다."
             });
+        });
+    });
+
+});
+
+// 답변 스트리밍
+router.get('/:aid', function(req, res, next) {
+    logger.log('info', '%s %s://%s%s', req.method, req.protocol, req.headers['host'], req.originalUrl);
+
+    var id = req.user.id;
+    var aid = req.params.aid || undefined;
+
+    if (!aid) {
+        return res.send({
+
+        })
+    }
+
+    Answer.streamingAnswer(id, aid, function(err, results) {
+        if (err) {
+            return next(err);
+        }
+        res.send({
+            result: results
         });
     });
 
